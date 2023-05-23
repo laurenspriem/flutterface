@@ -60,19 +60,43 @@ class _MyHomePageState extends State<MyHomePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             (_image != null)
-                ? Image.file(File(_image!.path))
+                ? SizedBox(
+                    height: 400,
+                    child: Image.file(File(_image!.path)),
+                  )
                 : const Text('No image selected'),
-            TextButton(
-              onPressed: _pickImage,
-              style: TextButton.styleFrom(
-                foregroundColor:
-                    Theme.of(context).colorScheme.onPrimaryContainer,
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: 150,
+              child: TextButton(
+                onPressed: _pickImage,
+                style: TextButton.styleFrom(
+                  foregroundColor:
+                      Theme.of(context).colorScheme.onPrimaryContainer,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
+                child: const Text('Pick image'),
               ),
-              child: const Text('Pick image'),
+            ),
+            SizedBox(
+              width: 150,
+              child: TextButton(
+                onPressed: () {},
+                style: TextButton.styleFrom(
+                  foregroundColor:
+                      Theme.of(context).colorScheme.onPrimaryContainer,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('Detect faces'),
+              ),
             )
           ],
         ),
