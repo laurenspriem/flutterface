@@ -37,7 +37,6 @@ dependencies:
   cupertino_icons: ^1.0.2
   image_picker: ^0.8.7+5
   tflite_flutter: ^0.10.0
-  permission_handler: ^10.2.0
   
 
 dev_dependencies:

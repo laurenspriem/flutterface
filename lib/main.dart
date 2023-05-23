@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(const MyApp());
@@ -39,13 +38,6 @@ class _MyHomePageState extends State<MyHomePage> {
   XFile? _image;
 
   void _pickImage() async {
-    if (await Permission.mediaLibrary.request().isGranted) {
-      devtools.log('Media Permission granted');
-    } else {
-      devtools.log('Media Permission denied');
-      await Permission.mediaLibrary.request();
-    }
-
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       setState(() {
