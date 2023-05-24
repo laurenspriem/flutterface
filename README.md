@@ -1,16 +1,11 @@
-# flutterface
+# FlutterFace
 
-A new Flutter project.
+A basic demo app for running face recognition locally on your phone using [Flutter](https://flutter.dev) and [TensorFlow Lite](https://www.tensorflow.org/lite). 
+This is possible with the use of the [tflite_flutter](https://pub.dev/packages/tflite_flutter) plugin. 
 
-## Getting Started
+We use [BlazeFace](https://arxiv.org/abs/1907.05047) for face detection and [MobileFaceNet](https://arxiv.org/abs/1804.07573) for creating embeddings.
 
-This project is a starting point for a Flutter application.
 
-A few resources to get you started if this is your first Flutter project:
+## Credits
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Reused large parts of the [FlutterWithMediaPipe](https://github.com/JaeHeee/FlutterWithMediaPipe) (and one [fork](https://github.com/lcw99/FlutterWithMediaPipe)) project for the face detection part.
