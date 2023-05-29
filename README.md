@@ -8,4 +8,4 @@ We use [BlazeFace](https://arxiv.org/abs/1907.05047) for face detection and [Mob
 
 ## Credits
 
-- Reused large parts of the [FlutterWithMediaPipe](https://github.com/JaeHeee/FlutterWithMediaPipe) (and one [fork](https://github.com/lcw99/FlutterWithMediaPipe)) project for the face detection part.
+- Reused large parts of the [FlutterWithMediaPipe](https://github.com/JaeHeee/FlutterWithMediaPipe) (and one [fork](https://github.com/lcw99/FlutterWithMediaPipe)) project for the face detection part. [This example](https://github.com/tensorflow/flutter-tflite/blob/main/example/image_classification_mobilenet/lib/main.dart) also helped.
