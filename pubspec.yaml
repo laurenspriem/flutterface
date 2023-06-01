@@ -21,7 +21,7 @@ dependencies:
   #     url: https://github.com/pnyompen/tflite_flutter_helper.git
   #     ref: 43e87d4b9627539266dc20250beb35bf36320dce
   # camera: ^0.10.5+2
-  get_it: ^7.6.0
+  # get_it: ^7.6.0
   equatable: ^2.0.5
   scidart: ^0.0.2-dev.12
   

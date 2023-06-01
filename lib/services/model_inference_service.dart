@@ -2,8 +2,8 @@ import 'dart:developer' as devtools show log;
 
 import 'package:flutterface/enums/models.dart';
 import 'package:flutterface/services/ai_model.dart';
-import 'package:flutterface/services/face_detection/face_detection_service.dart';
-import 'package:flutterface/services/service_locator.dart';
+// import 'package:flutterface/services/face_detection/face_detection_service.dart';
+// import 'package:flutterface/services/service_locator.dart';
 
 class ModelInferenceService {
   late AIModel model;
@@ -19,8 +19,10 @@ class ModelInferenceService {
         imagePath: imagePath,
         detectorAddress: model.getAddress,
       );
+      return inferenceResults;
     } catch (e) {
       devtools.log('Error during inference: $e');
+      return null;
     }
   }
 

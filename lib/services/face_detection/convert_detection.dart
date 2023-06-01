@@ -4,9 +4,9 @@ import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/options.dart';
 
 List<Detection> convertToDetections(
-  List<double> rawBoxes,
+  List<dynamic> rawBoxes,
   List<Anchor> anchors,
-  List<double> detectionScores,
+  List<dynamic> detectionScores,
   List<int> detectionClasses,
   OptionsFace options,
 ) {

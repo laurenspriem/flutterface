@@ -19,7 +19,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
-  XFile? _image;
   String? _imagePath;
   Image? _imageWidget;
   Image? _imageWidgetUndrawn;
@@ -55,11 +54,9 @@ class _HomePageState extends State<HomePage> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       setState(() {
-        _image = image;
         _imagePath = image.path;
         _imageWidget = Image.file(File(_imagePath!));
         cleanResult();
-        _isAnalyzed = false;
       });
     } else {
       devtools.log('No image selected');
@@ -70,6 +67,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       // _imageWidget = Image.asset('assets/images/stock_images/one_person.jpeg');
       _imageWidget = Image.asset(_stockImagePaths[_stockImageCounter]);
+      _imagePath = _stockImagePaths[_stockImageCounter];
       _stockImageCounter = (_stockImageCounter + 1) % _stockImagePaths.length;
       _isAnalyzed = false;
     });
@@ -82,6 +80,7 @@ class _HomePageState extends State<HomePage> {
       _imageWidget = _imageWidgetUndrawn;
     }
     _imageWidgetUndrawn = null;
+    setState(() {});
   }
 
   void analyzeImage() async {
@@ -108,12 +107,14 @@ class _HomePageState extends State<HomePage> {
 
     // 'Image plane data length: ${_imageWidget.planes[0].bytes.length}');
     if (!_isModelLoaded) {
-      devtools.log('Loading model');
-      _faceDetection = FaceDetection();
+      _faceDetection = await FaceDetection.create();
       _isModelLoaded = true;
     }
 
-    _faceDetectionResult = _faceDetection.predict(_imagePath!);
+    final processedInputImage =
+        await _faceDetection.getPreprocessedImage(_imagePath!);
+
+    _faceDetectionResult = _faceDetection.predict(processedInputImage);
 
     devtools.log('Inference completed');
 

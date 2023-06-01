@@ -1,8 +1,8 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
 import 'dart:math';
-import 'dart:ui';
 
+import 'package:flutter/services.dart';
 import 'package:flutterface/constants/model_file.dart';
 import 'package:flutterface/services/ai_model.dart';
 import 'package:flutterface/services/face_detection/anchors.dart';
@@ -15,8 +15,12 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 
 // ignore: must_be_immutable
 class FaceDetection extends AIModel {
-  FaceDetection({this.interpreter}) {
-    loadModel();
+  FaceDetection._();
+
+  static Future<FaceDetection> create() async {
+    final faceDetector = FaceDetection._();
+    await faceDetector.loadModel();
+    return faceDetector;
   }
 
   final int inputSize = 128;
@@ -35,8 +39,28 @@ class FaceDetection extends AIModel {
   late int originalImageWidth;
   late int originalImageHeight;
 
+  // static Future<Uint8List> loadImageData(String imagePath) async {
+  //   final ByteData imageData = await rootBundle.load(imagePath);
+  //   return imageData.buffer.asUint8List();
+  // }
+
+  static List createNestedList(List<int> shape) {
+    if (shape.length < 2 || shape.length > 3) {
+      throw ArgumentError('Shape must have length 2 or 3');
+    }
+    if (shape.length == 2) {
+      return List.generate(shape[0], (_) => List.filled(shape[1], 0.0));
+    } else {
+      return List.generate(
+        shape[0],
+        (_) => List.generate(shape[1], (_) => List.filled(shape[2], 0.0)),
+      );
+    }
+  }
+
   @override
   Future<void> loadModel() async {
+    devtools.log('loadModel is called');
     final anchorOption = AnchorOption(
       inputSizeHeight: 128,
       inputSizeWidth: 128,
@@ -94,7 +118,7 @@ class FaceDetection extends AIModel {
         outputShapes.add(tensor.shape);
         outputTypes.add(tensor.type);
       }
-      devtools.log('Model interpreter loaded successfully');
+      devtools.log('loadModel is finished');
     } catch (e) {
       devtools.log('Error while creating interpreter: $e');
     }
@@ -105,27 +129,29 @@ class FaceDetection extends AIModel {
   }
 
   @override
-  List<List<List<num>>> getPreprocessedImage(String imagePath) {
-    assert(interpreter != null);
+  Future<List<List<List<num>>>> getPreprocessedImage(String imagePath) async {
+    devtools.log('Preprocessing is called');
     assert(imagePath.isNotEmpty);
 
     // Read image bytes from file
     final imageData = File(imagePath).readAsBytesSync();
+    // final imageData = await loadImageData(imagePath);
 
     // Decode image using package:image/image.dart (https://pub.dev/image)
-    final image_lib.Image? image = image_lib.decodeImage(imageData);
+    var image = image_lib.decodeImage(imageData);
     if (image == null) {
       throw Exception('Image not found');
     }
 
-    // if (Platform.isAndroid) {
-    //   image = image_lib.copyRotate(image, angle: -90);
-    //   image = image_lib.flipHorizontal(image);
-    // }
+    if (Platform.isAndroid) {
+      image = image_lib.copyRotate(image, angle: -90);
+      image = image_lib.flipHorizontal(image);
+    }
 
-    // Resize image for model input
     originalImageWidth = image.width;
     originalImageHeight = image.height;
+
+    // Resize image for model input
     image_lib.Image imageInput = image_lib.copyResize(
       image,
       width: inputSize,
@@ -148,13 +174,14 @@ class FaceDetection extends AIModel {
         },
       ),
     );
+    devtools.log('Preprocessing is finished');
 
     return imageMatrix;
   }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter
   @override
-  List<Map<String, dynamic>> predict(String imagePath) {
+  List<Map<String, dynamic>> predict(List<List<List<num>>> inputImageMatrix) {
     assert(interpreter != null);
 
     final options = OptionsFace(
@@ -175,23 +202,38 @@ class FaceDetection extends AIModel {
       wScale: 128,
     );
 
-    final inputImageMatrix = getPreprocessedImage(imagePath);
-    final input = [inputImageMatrix];
-    final output = [
-      List<double>.filled(1, 896 * 16),
-      List<double>.filled(1, 896 * 1)
-    ];
+    devtools.log('outputShapes: $outputShapes');
 
+    final input = [inputImageMatrix];
+
+    final outputFaces = createNestedList(outputShapes[0]);
+    final outputScores = createNestedList(outputShapes[1]);
+    final outputs = <int, List>{
+      0: outputFaces,
+      1: outputScores,
+    };
+
+    devtools.log('Input of shape ${input.shape}');
+    devtools
+        .log('Outputs: of shape ${outputs[0]?.shape} and ${outputs[1]?.shape}');
+
+    devtools.log('Interpreter.run is called');
     // Run inference
-    interpreter!.run(input, output);
+    interpreter!.runForMultipleInputs([input], outputs);
+    devtools.log('Interpreter.run is finished');
 
     // Get output tensors
-    final rawBoxes = output[0];
-    final rawScores = output[1];
+    final rawBoxes = outputs[0]!;
+    final rawScores = outputs[1]!;
+
+    devtools.log('rawScores shape: ${rawScores.shape}');
+
+    // devtools.log('Raw boxes: $rawBoxes');
+    // devtools.log('Raw scores: $rawScores');
 
     var detections = process(
       options: options,
-      rawScores: rawScores,
+      rawScores: rawScores[0],
       rawBoxes: rawBoxes,
       anchors: _anchors,
     );

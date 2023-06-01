@@ -1,9 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutterface/services/face_detection/anchors.dart';
 import 'package:flutterface/services/face_detection/options.dart';
 import 'package:scidart/numdart.dart';
 
 Array decodeBox(
-    List<double> rawBoxes, int i, List<Anchor> anchors, OptionsFace options) {
+    List<dynamic> rawBoxes, int i, List<Anchor> anchors, OptionsFace options) {
   var boxData = Array(List<double>.generate(options.numCoords, (i) => 0.0));
   var boxOffset = i * options.numCoords + options.boxCoordOffset;
   var yCenter = rawBoxes[boxOffset];
@@ -21,8 +23,8 @@ Array decodeBox(
   yCenter = yCenter / options.yScale * anchors[i].h + anchors[i].yCenter;
 
   if (options.applyExponentialOnBoxSize) {
-    h = exp(h / options.hScale) * anchors[i].h;
-    w = exp(w / options.wScale) * anchors[i].w;
+    h = math.exp(h / options.hScale) * anchors[i].h;
+    w = math.exp(w / options.wScale) * anchors[i].w;
   } else {
     h = h / options.hScale * anchors[i].h;
     w = w / options.wScale * anchors[i].w;
