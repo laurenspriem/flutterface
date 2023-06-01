@@ -152,16 +152,13 @@ class FaceDetection extends AIModel {
     originalImageHeight = image.height;
 
     // Resize image for model input
-    image_lib.Image imageInput = image_lib.copyResize(
+    final image_lib.Image imageInput = image_lib.copyResize(
       image,
       width: inputSize,
       height: inputSize,
       interpolation: image_lib
           .Interpolation.cubic, // if this is too slow, change to linear
     );
-
-    // Normalize the image to range [-1, 1]
-    imageInput = image_lib.normalize(imageInput, min: -1, max: 1);
 
     // Get image matrix representation [128, 128, 3]
     final imageMatrix = List.generate(
@@ -170,11 +167,23 @@ class FaceDetection extends AIModel {
         imageInput.width,
         (x) {
           final pixel = imageInput.getPixel(x, y);
-          return [pixel.r, pixel.g, pixel.b];
+          // return [pixel.r, pixel.g, pixel.b];
+          return [
+            pixel.r / 127.5 - 1, // Normalize the image to range [-1, 1]
+            pixel.g / 127.5 - 1, // Normalize the image to range [-1, 1]
+            pixel.b / 127.5 - 1, // Normalize the image to range [-1, 1]
+          ];
         },
       ),
     );
     devtools.log('Preprocessing is finished');
+
+    // Check the content of imageMatrix for anything suspicious!
+    // for (var i = 0; i < imageMatrix.length; i++) {
+    //   for (var j = 0; j < imageMatrix[i].length; j++) {
+    //     devtools.log('Pixel at [$i, $j]: ${imageMatrix[i][j]}');
+    //   }
+    // }
 
     return imageMatrix;
   }
@@ -226,10 +235,14 @@ class FaceDetection extends AIModel {
     final rawBoxes = outputs[0]!;
     final rawScores = outputs[1]!;
 
-    devtools.log('rawScores shape: ${rawScores.shape}');
+    final List<dynamic> flatScores = List.filled(896, 0);
+    for (var i = 0; i < rawScores[0].length; i++) {
+      flatScores[i] = rawScores[0][i][0];
+    }
+    final flatScoresSorted = flatScores;
+    flatScoresSorted.sort();
+    devtools.log('Ten highest scores: ${flatScoresSorted.sublist(886)}');
 
-    // devtools.log('Raw boxes: $rawBoxes');
-    // devtools.log('Raw scores: $rawScores');
 
     var detections = process(
       options: options,
@@ -271,16 +284,3 @@ class FaceDetection extends AIModel {
   }
 }
 
-// Map<String, dynamic>? runFaceDetector(Map<String, dynamic> params) {
-//   try {
-//     devtools.log('[log] runFaceDetector');
-//     final faceDetection = FaceDetection(
-//         // interpreter: Interpreter.fromAddress(params['detectorAddress']),);
-//     final image = ImageUtils.convertCameraImage(params['cameraImage'])!;
-//     final result = faceDetection.predict(image);
-//     devtools.log('[log] Prediction complete: $result');
-//     return result;
-//   } catch (e) {
-//     devtools.log('Error during face detection: $e');
-//   }
-// }
