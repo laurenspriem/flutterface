@@ -21,7 +21,6 @@ class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
   String? _imagePath;
   Image? _imageWidget;
-  Image? _imageWidgetUndrawn;
   int _stockImageCounter = 0;
   final List<String> _stockImagePaths = [
     'assets/images/stock_images/one_person.jpeg',
@@ -69,33 +68,30 @@ class _HomePageState extends State<HomePage> {
       _imageWidget = Image.asset(_stockImagePaths[_stockImageCounter]);
       _imagePath = _stockImagePaths[_stockImageCounter];
       _stockImageCounter = (_stockImageCounter + 1) % _stockImagePaths.length;
-      _isAnalyzed = false;
+      cleanResult();
     });
   }
 
   void cleanResult() {
     _isAnalyzed = false;
     _faceDetectionResult = [];
-    if (_imageWidgetUndrawn != null) {
-      _imageWidget = _imageWidgetUndrawn;
-    }
-    _imageWidgetUndrawn = null;
     setState(() {});
   }
 
   void analyzeImage() async {
     if (_imagePath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Please select an image first'),
-        duration: Duration(seconds: 2),
-      ),);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an image first'),
+          duration: Duration(seconds: 2),
+        ),
+      );
       return;
     }
     assert(_imageWidget != null);
     if (_isAnalyzed || _predicting) {
       return;
     }
-    _imageWidgetUndrawn = _imageWidget;
 
     setState(() {
       _predicting = true;
