@@ -85,7 +85,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   void analyzeImage() async {
-    assert(_imagePath != null);
+    if (_imagePath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please select an image first'),
+        duration: Duration(seconds: 2),
+      ),);
+      return;
+    }
     assert(_imageWidget != null);
     if (_isAnalyzed || _predicting) {
       return;
