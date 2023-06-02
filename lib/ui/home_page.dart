@@ -113,6 +113,8 @@ class _HomePageState extends State<HomePage> {
     _faceDetectionResult = _faceDetection.predict(processedInputImage);
 
     devtools.log('Inference completed');
+    devtools.log('Inference results: list $_faceDetectionResult of length '
+        '${_faceDetectionResult.length}');
 
     setState(() {
       _predicting = false;
