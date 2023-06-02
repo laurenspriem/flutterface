@@ -14,26 +14,25 @@ List<Detection> process({
   final detectionScores = <dynamic>[];
   final detectionClasses = <int>[];
 
+  // TODO: remove the whole classes part
   for (var i = 0; i < options.numBoxes; i++) {
     var classId = -1;
     var maxScore = double.minPositive;
-    for (var scoreIdx = 0; scoreIdx < options.numClasses; scoreIdx++) {
-      var score = rawScores[i * options.numClasses + scoreIdx][0];
-      if (options.sigmoidScore) {
-        if (options.scoreClippingThresh > 0) {
-          score = (score < -options.scoreClippingThresh)
-              ? -options.scoreClippingThresh
-              : score;
-          score = (score > options.scoreClippingThresh)
-              ? options.scoreClippingThresh
-              : score;
-        }
-        score = 1.0 / (1.0 + math.exp(-score));
+    var score = rawScores[i][0];
+    if (options.sigmoidScore) {
+      if (options.scoreClippingThresh > 0) {
+        score = (score < -options.scoreClippingThresh)
+            ? -options.scoreClippingThresh
+            : score;
+        score = (score > options.scoreClippingThresh)
+            ? options.scoreClippingThresh
+            : score;
       }
-      if (maxScore < score) {
-        maxScore = score;
-        classId = scoreIdx;
-      }
+      score = 1.0 / (1.0 + math.exp(-score));
+    }
+    if (maxScore < score) {
+      maxScore = score;
+      classId = 0;
     }
     detectionClasses.add(classId);
     detectionScores.add(maxScore);

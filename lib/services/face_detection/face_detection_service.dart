@@ -200,7 +200,7 @@ class FaceDetection extends AIModel {
       keypointCoordOffset: 4,
       ignoreClasses: [],
       scoreClippingThresh: 100.0,
-      minScoreThresh: 0.75,
+      minScoreThresh: 0.70,
       numKeypoints: 6,
       numValuesPerKeypoint: 2,
       reverseOutputOrder: true,

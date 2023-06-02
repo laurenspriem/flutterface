@@ -5,18 +5,22 @@ import 'package:flutterface/services/face_detection/options.dart';
 import 'package:scidart/numdart.dart';
 
 Array decodeBox(
-    List<dynamic> rawBoxes, int i, List<Anchor> anchors, OptionsFace options) {
-  var boxData = Array(List<double>.generate(options.numCoords, (i) => 0.0));
-  var boxOffset = i * options.numCoords + options.boxCoordOffset;
-  var yCenter = rawBoxes[boxOffset];
-  var xCenter = rawBoxes[boxOffset + 1];
-  var h = rawBoxes[boxOffset + 2];
-  var w = rawBoxes[boxOffset + 3];
+  List<dynamic> rawBoxes,
+  int i,
+  List<Anchor> anchors,
+  OptionsFace options,
+) {
+  final boxData = Array(List<double>.generate(options.numCoords, (i) => 0.0));
+
+  var yCenter = rawBoxes[0][i][options.boxCoordOffset];
+  var xCenter = rawBoxes[0][i][options.boxCoordOffset + 1];
+  var h = rawBoxes[0][i][options.boxCoordOffset + 2];
+  var w = rawBoxes[0][i][options.boxCoordOffset + 3];
   if (options.reverseOutputOrder) {
-    xCenter = rawBoxes[boxOffset];
-    yCenter = rawBoxes[boxOffset + 1];
-    w = rawBoxes[boxOffset + 2];
-    h = rawBoxes[boxOffset + 3];
+    xCenter = rawBoxes[0][i][options.boxCoordOffset];
+    yCenter = rawBoxes[0][i][options.boxCoordOffset + 1];
+    w = rawBoxes[0][i][options.boxCoordOffset + 2];
+    h = rawBoxes[0][i][options.boxCoordOffset + 3];
   }
 
   xCenter = xCenter / options.xScale * anchors[i].w + anchors[i].xCenter;
@@ -30,10 +34,10 @@ Array decodeBox(
     w = w / options.wScale * anchors[i].w;
   }
 
-  var yMin = yCenter - h / 2.0;
-  var xMin = xCenter - w / 2.0;
-  var yMax = yCenter + h / 2.0;
-  var xMax = xCenter + w / 2.0;
+  final yMin = yCenter - h / 2.0;
+  final xMin = xCenter - w / 2.0;
+  final yMax = yCenter + h / 2.0;
+  final xMax = xCenter + w / 2.0;
 
   boxData[0] = yMin;
   boxData[1] = xMin;
@@ -42,15 +46,14 @@ Array decodeBox(
 
   if (options.numKeypoints > 0) {
     for (var k = 0; k < options.numKeypoints; k++) {
-      var offset = i * options.numCoords +
-          options.keypointCoordOffset +
-          k * options.numValuesPerKeypoint;
-      var keyPointY = rawBoxes[offset];
-      var keyPointX = rawBoxes[offset + 1];
+      final offset =
+          options.keypointCoordOffset + k * options.numValuesPerKeypoint;
+      var keyPointY = rawBoxes[0][i][offset];
+      var keyPointX = rawBoxes[0][i][offset + 1];
 
       if (options.reverseOutputOrder) {
-        keyPointX = rawBoxes[offset];
-        keyPointY = rawBoxes[offset + 1];
+        keyPointX = rawBoxes[0][i][offset];
+        keyPointY = rawBoxes[0][i][offset + 1];
       }
       boxData[4 + k * options.numValuesPerKeypoint] =
           keyPointX / options.xScale * anchors[i].w + anchors[i].xCenter;
