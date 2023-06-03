@@ -123,7 +123,6 @@ class _HomePageState extends State<HomePage> {
     final right = bbox.right;
     final bottom = bbox.bottom;
 
-    // TODO: get the cropped face _croppedFace
     final originalImage =
         img_lib.decodeImage(File(_imagePath!).readAsBytesSync())!;
     final croppedImage = img_lib.copyCrop(
