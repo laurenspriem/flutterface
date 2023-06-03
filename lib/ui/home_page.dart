@@ -4,9 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutterface/services/face_detection/face_detection_service.dart';
 import 'package:flutterface/utils/face_detection_painter.dart';
-// import 'package:flutterface/services/model_inference_service.dart';
-// import 'package:flutterface/services/service_locator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img_lib;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.title});
@@ -21,6 +20,7 @@ class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
   String? _imagePath;
   Image? _imageWidget;
+  Image? _croppedFace;
   int _stockImageCounter = 0;
   final List<String> _stockImagePaths = [
     'assets/images/stock_images/one_person.jpeg',
@@ -75,6 +75,7 @@ class _HomePageState extends State<HomePage> {
   void cleanResult() {
     _isAnalyzed = false;
     _faceDetectionResult = [];
+    _croppedFace = null;
     setState(() {});
   }
 
@@ -116,7 +117,25 @@ class _HomePageState extends State<HomePage> {
     devtools.log('Inference results: list $_faceDetectionResult of length '
         '${_faceDetectionResult.length}');
 
+    final bbox = _faceDetectionResult[0]['bbox'];
+    final left = bbox.left;
+    final top = bbox.top;
+    final right = bbox.right;
+    final bottom = bbox.bottom;
+
+    // TODO: get the cropped face _croppedFace
+    final originalImage =
+        img_lib.decodeImage(File(_imagePath!).readAsBytesSync())!;
+    final croppedImage = img_lib.copyCrop(
+      originalImage,
+      x: left.toInt(),
+      y: top.toInt(),
+      width: (right - left).toInt(),
+      height: (bottom - top).toInt(),
+    );
+
     setState(() {
+      _croppedFace = Image.memory(img_lib.encodeJpg(croppedImage));
       _predicting = false;
       _isAnalyzed = true;
     });
@@ -133,7 +152,12 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            if (_imageWidget != null &&
+            if (_croppedFace != null)
+              SizedBox(
+                height: 400,
+                child: _croppedFace,
+              )
+            else if (_imageWidget != null &&
                 _isAnalyzed) // Only show bounding box when image is analyzed
               SizedBox(
                 height: 400,

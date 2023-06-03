@@ -243,7 +243,6 @@ class FaceDetection extends AIModel {
     flatScoresSorted.sort();
     devtools.log('Ten highest scores: ${flatScoresSorted.sublist(886)}');
 
-
     var detections = process(
       options: options,
       rawScores: rawScores[0],
@@ -283,4 +282,3 @@ class FaceDetection extends AIModel {
     return rectFaces;
   }
 }
-
