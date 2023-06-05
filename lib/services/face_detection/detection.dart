@@ -6,5 +6,11 @@ class Detection {
   final double width;
   final double height;
   Detection(
-      this.score, this.classID, this.xMin, this.yMin, this.width, this.height);
+    this.score,
+    this.classID,
+    this.xMin,
+    this.yMin,
+    this.width,
+    this.height,
+  );
 }

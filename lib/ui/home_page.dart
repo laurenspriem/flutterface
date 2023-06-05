@@ -99,8 +99,6 @@ class _HomePageState extends State<HomePage> {
     });
 
     devtools.log('Image is sent to the model for inference');
-    devtools.log('Image size: ${_imageWidget?.width}x${_imageWidget?.height} ('
-        '${(_imageWidget?.width ?? 0) * (_imageWidget?.height ?? 0)} pixels))');
 
     // 'Image plane data length: ${_imageWidget.planes[0].bytes.length}');
     if (!_isModelLoaded) {
@@ -151,12 +149,13 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            if (_croppedFace != null)
-              SizedBox(
-                height: 400,
-                child: _croppedFace,
-              )
-            else if (_imageWidget != null &&
+            // if (_croppedFace != null)
+            //   SizedBox(
+            //     height: 400,
+            //     child: _croppedFace,
+            //   )
+            // else
+            if (_imageWidget != null &&
                 _isAnalyzed) // Only show bounding box when image is analyzed
               SizedBox(
                 height: 400,

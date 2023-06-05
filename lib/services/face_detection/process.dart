@@ -34,8 +34,8 @@ List<Detection> process({
       maxScore = score;
       classId = 0;
     }
-    detectionClasses.add(classId);
-    detectionScores.add(maxScore);
+    detectionClasses.add(classId); // List of 0s of length numBoxes (896)
+    detectionScores.add(maxScore); // List of sigmoid detection scores of length numBoxes (896)
   }
   // print('[log] Detection classes: $detectionClasses'); // Just a bunch of 0s if it's not working
   // print('[log] Detection scores: $detectionScores'); // Just a bunch of low scores if it's not working

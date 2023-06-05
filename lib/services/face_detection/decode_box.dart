@@ -34,10 +34,10 @@ Array decodeBox(
     w = w / options.wScale * anchors[i].w;
   }
 
-  final yMin = yCenter - h / 2.0;
-  final xMin = xCenter - w / 2.0;
-  final yMax = yCenter + h / 2.0;
-  final xMax = xCenter + w / 2.0;
+  final yMin = yCenter - h * 0.5;
+  final xMin = xCenter - w * 0.5;
+  final yMax = yCenter + h * 0.5;
+  final xMax = xCenter + w * 0.5;
 
   boxData[0] = yMin;
   boxData[1] = xMin;

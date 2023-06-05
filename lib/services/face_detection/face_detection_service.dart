@@ -150,6 +150,8 @@ class FaceDetection extends AIModel {
 
     originalImageWidth = image.width;
     originalImageHeight = image.height;
+    devtools.log(
+        'originalImageWidth: $originalImageWidth, originalImageHeight: $originalImageHeight');
 
     // Resize image for model input
     final image_lib.Image imageInput = image_lib.copyResize(
@@ -232,20 +234,34 @@ class FaceDetection extends AIModel {
     devtools.log('Interpreter.run is finished');
 
     // Get output tensors
-    final rawBoxes = outputs[0]!;
-    final rawScores = outputs[1]!;
+    final rawBoxes = outputs[0]!; // Nested List of shape [1, 896, 16]
+    final rawScores = outputs[1]![0]; // Nested List of shape [896, 1]
 
+    // Visually inspecting the raw scores
     final List<dynamic> flatScores = List.filled(896, 0);
-    for (var i = 0; i < rawScores[0].length; i++) {
-      flatScores[i] = rawScores[0][i][0];
+    for (var i = 0; i < rawScores.length; i++) {
+      flatScores[i] = rawScores[i][0];
     }
     final flatScoresSorted = flatScores;
     flatScoresSorted.sort();
-    devtools.log('Ten highest scores: ${flatScoresSorted.sublist(886)}');
+    devtools.log('Ten highest (raw) scores: ${flatScoresSorted.sublist(886)}');
+
+    // Visually inspecting the raw boxes
+    final List<dynamic> flatBoxesFirstCoordinates = List.filled(896, 0);
+    final List<dynamic> flatBoxesSecondCoordinates = List.filled(896, 0);
+    final List<dynamic> flatBoxesThirdCoordinates = List.filled(896, 0);
+    final List<dynamic> flatBoxesFourthCoordinates = List.filled(896, 0);
+    for (var i = 0; i < rawBoxes[0].length; i++) {
+      flatBoxesFirstCoordinates[i] = rawBoxes[0][i][0];
+      flatBoxesSecondCoordinates[i] = rawBoxes[0][i][1];
+      flatBoxesThirdCoordinates[i] = rawBoxes[0][i][2];
+      flatBoxesFourthCoordinates[i] = rawBoxes[0][i][3];
+    }
+    devtools.log('rawBoxesFirstCoordinates: $flatBoxesFirstCoordinates');
 
     var detections = process(
       options: options,
-      rawScores: rawScores[0],
+      rawScores: rawScores,
       rawBoxes: rawBoxes,
       anchors: _anchors,
     );

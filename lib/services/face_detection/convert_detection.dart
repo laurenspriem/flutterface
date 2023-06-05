@@ -40,8 +40,8 @@ Detection convertToDetection(
   bool flipVertically,
 ) {
   final yMin = flipVertically ? 1.0 - boxYMax : boxYMin;
-  final width = boxXMax;
-  final height = boxYMax;
+  final width = boxXMax; // -boxXMin; // THIS IS WEIRD RIGHT???????
+  final height = boxYMax; // -boxYMin;
 
   return Detection(
     score,
