@@ -1,6 +1,7 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
 
+import 'package:flutter/services.dart' show ByteData, rootBundle;
 import 'package:flutterface/constants/model_file.dart';
 import 'package:flutterface/services/face_detection/anchors.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
@@ -8,7 +9,6 @@ import 'package:flutterface/services/face_detection/filter_extract_detections.da
 import 'package:flutterface/services/face_detection/generate_anchors.dart';
 import 'package:flutterface/services/face_detection/naive_non_max_suppression.dart';
 import 'package:flutterface/services/face_detection/options.dart';
-import 'package:flutter/services.dart' show ByteData, rootBundle;
 import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
@@ -22,8 +22,13 @@ class FaceDetection {
     return faceDetector;
   }
 
-  final int inputSize = 128;
-  final double threshold = 0.7;
+  final options = OptionsFace(
+    numBoxes: 896,
+    minScoreSigmoidThreshold: 0.70,
+    iouThreshold: 0.3,
+    inputWidth: 128,
+    inputHeight: 128,
+  );
 
   final outputShapes = <List<int>>[];
   final outputTypes = <TensorType>[];
@@ -164,8 +169,8 @@ class FaceDetection {
     // Resize image for model input
     final image_lib.Image imageInput = image_lib.copyResize(
       image,
-      width: inputSize,
-      height: inputSize,
+      width: options.inputWidth,
+      height: options.inputHeight,
       interpolation: image_lib
           .Interpolation.cubic, // if this is too slow, change to linear
     );
@@ -202,13 +207,13 @@ class FaceDetection {
   List<Detection> predict(List<List<List<num>>> inputImageMatrix) {
     assert(interpreter != null);
 
-    final options = OptionsFace(
-      numBoxes: 896,
-      minScoreSigmoidThreshold: 0.70,
-      iouThreshold: 0.3,
-      inputWidth: 128,
-      inputHeight: 128,
-    );
+    // final options = OptionsFace(
+    //   numBoxes: 896,
+    //   minScoreSigmoidThreshold: 0.70,
+    //   iouThreshold: 0.3,
+    //   inputWidth: 128,
+    //   inputHeight: 128,
+    // );
 
     devtools.log('outputShapes: $outputShapes');
 

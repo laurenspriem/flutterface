@@ -10,8 +10,8 @@ class OptionsFace {
   final int numValuesPerKeypoint;
   final int boxCoordOffset;
   final int maxNumFaces;
-  final double inputWidth;
-  final double inputHeight;
+  final int inputWidth;
+  final int inputHeight;
   final double scoreClippingThresh;
   final double inverseSigmoidMinScoreThreshold;
   final bool applyExponentialOnBoxSize;
