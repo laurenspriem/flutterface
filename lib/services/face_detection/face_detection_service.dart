@@ -2,33 +2,28 @@ import 'dart:developer' as devtools show log;
 import 'dart:io';
 
 import 'package:flutter/services.dart' show ByteData, rootBundle;
-import 'package:flutterface/constants/model_file.dart';
 import 'package:flutterface/services/face_detection/anchors.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/filter_extract_detections.dart';
 import 'package:flutterface/services/face_detection/generate_anchors.dart';
+import 'package:flutterface/services/face_detection/model_config.dart';
 import 'package:flutterface/services/face_detection/naive_non_max_suppression.dart';
-import 'package:flutterface/services/face_detection/options.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
-// ignore: must_be_immutable
 class FaceDetection {
-  FaceDetection._();
+  FaceDetection._({required this.config});
+
+  final ModelConfig config;
 
   static Future<FaceDetection> create() async {
-    final faceDetector = FaceDetection._();
+    // In the line below, we can change the model to use
+    final config =
+        faceDetectionFullRangeDense; // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense;
+    final faceDetector = FaceDetection._(config: config);
     await faceDetector.loadModel();
     return faceDetector;
   }
-
-  final options = OptionsFace(
-    numBoxes: 896,
-    minScoreSigmoidThreshold: 0.70,
-    iouThreshold: 0.3,
-    inputWidth: 128,
-    inputHeight: 128,
-  );
 
   final outputShapes = <List<int>>[];
   final outputTypes = <TensorType>[];
@@ -42,11 +37,6 @@ class FaceDetection {
   late List<Anchor> _anchors;
   late int originalImageWidth;
   late int originalImageHeight;
-
-  // static Future<Uint8List> loadImageData(String imagePath) async {
-  //   final ByteData imageData = await rootBundle.load(imagePath);
-  //   return imageData.buffer.asUint8List();
-  // }
 
   static List createNestedList(List<int> shape) {
     if (shape.length < 2 || shape.length > 3) {
@@ -64,22 +54,9 @@ class FaceDetection {
 
   Future<void> loadModel() async {
     devtools.log('loadModel is called');
-    final anchorOption = AnchorOption(
-      inputSizeHeight: 128,
-      inputSizeWidth: 128,
-      minScale: 0.1484375,
-      maxScale: 0.75,
-      anchorOffsetX: 0.5,
-      anchorOffsetY: 0.5,
-      numLayers: 4,
-      featureMapHeight: [],
-      featureMapWidth: [],
-      strides: [8, 16, 16, 16],
-      aspectRatios: [1.0],
-      reduceBoxesInLowestLayer: false,
-      interpolatedScaleAspectRatio: 1.0,
-      fixedAnchorSize: true,
-    );
+
+    final anchorOption = config.anchorOptions;
+
     try {
       final interpreterOptions = InterpreterOptions();
 
@@ -105,7 +82,7 @@ class FaceDetection {
       // Load model from assets
       interpreter = interpreter ??
           await Interpreter.fromAsset(
-            ModelFile.faceDetectionShortRange,
+            config.modelPath,
             options: interpreterOptions,
           );
 
@@ -134,6 +111,7 @@ class FaceDetection {
   Future<List<List<List<num>>>> getPreprocessedImage(String imagePath) async {
     devtools.log('Preprocessing is called');
     assert(imagePath.isNotEmpty);
+    final faceOptions = config.faceOptions;
 
     image_lib.Image? image;
     if (imagePath.startsWith('assets/')) {
@@ -150,16 +128,6 @@ class FaceDetection {
       throw Exception('Image not found');
     }
 
-    // Read image bytes from file
-    // final imageData = File(imagePath).readAsBytesSync();
-    // final imageData = await loadImageData(imagePath);
-
-    // Decode image using package:image/image.dart (https://pub.dev/image)
-    // final image = image_lib.decodeImage(imageData);
-    // if (image == null) {
-    //   throw Exception('Image not found');
-    // }
-
     originalImageWidth = image.width;
     originalImageHeight = image.height;
     devtools.log(
@@ -169,8 +137,8 @@ class FaceDetection {
     // Resize image for model input
     final image_lib.Image imageInput = image_lib.copyResize(
       image,
-      width: options.inputWidth,
-      height: options.inputHeight,
+      width: faceOptions.inputWidth,
+      height: faceOptions.inputHeight,
       interpolation: image_lib
           .Interpolation.cubic, // if this is too slow, change to linear
     );
@@ -207,13 +175,7 @@ class FaceDetection {
   List<Detection> predict(List<List<List<num>>> inputImageMatrix) {
     assert(interpreter != null);
 
-    // final options = OptionsFace(
-    //   numBoxes: 896,
-    //   minScoreSigmoidThreshold: 0.70,
-    //   iouThreshold: 0.3,
-    //   inputWidth: 128,
-    //   inputHeight: 128,
-    // );
+    final faceOptions = config.faceOptions;
 
     devtools.log('outputShapes: $outputShapes');
 
@@ -262,7 +224,7 @@ class FaceDetection {
     // devtools.log('rawBoxesFirstCoordinates: $flatBoxesFirstCoordinates');
 
     var relativeDetections = filterExtractDetections(
-      options: options,
+      options: faceOptions,
       rawScores: rawScores,
       rawBoxes: rawBoxes,
       anchors: _anchors,
@@ -270,7 +232,7 @@ class FaceDetection {
 
     relativeDetections = naiveNonMaxSuppression(
       detections: relativeDetections,
-      iouThreshold: options.iouThreshold,
+      iouThreshold: faceOptions.iouThreshold,
     );
 
     if (relativeDetections.isEmpty) {
