@@ -2,10 +2,10 @@ import 'dart:developer' as devtools show log;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/face_detection_service.dart';
-import 'package:flutterface/utils/face_detection_painter.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img_lib;
+import 'package:image_picker/image_picker.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.title});
@@ -20,7 +20,7 @@ class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
   String? _imagePath;
   Image? _imageWidget;
-  Image? _croppedFace;
+  Image? _imageDrawn;
   int _stockImageCounter = 0;
   final List<String> _stockImagePaths = [
     'assets/images/stock_images/one_person.jpeg',
@@ -34,7 +34,7 @@ class _HomePageState extends State<HomePage> {
   bool _isModelLoaded = false;
   bool _predicting = false;
   late FaceDetection _faceDetection;
-  List<Map<String, dynamic>> _faceDetectionResult =
+  List<Detection> _faceDetectionResults =
       []; // map that contains 'bbox' and 'score'
 
   @override
@@ -74,8 +74,8 @@ class _HomePageState extends State<HomePage> {
 
   void cleanResult() {
     _isAnalyzed = false;
-    _faceDetectionResult = [];
-    _croppedFace = null;
+    _faceDetectionResults = [];
+    _imageDrawn = null;
     setState(() {});
   }
 
@@ -109,30 +109,55 @@ class _HomePageState extends State<HomePage> {
     final processedInputImage =
         await _faceDetection.getPreprocessedImage(_imagePath!);
 
-    _faceDetectionResult = _faceDetection.predict(processedInputImage);
+    _faceDetectionResults = _faceDetection.predict(processedInputImage);
 
     devtools.log('Inference completed');
-    devtools.log('Inference results: list $_faceDetectionResult of length '
-        '${_faceDetectionResult.length}');
+    devtools.log('Inference results: list $_faceDetectionResults of length '
+        '${_faceDetectionResults.length}');
 
-    final bbox = _faceDetectionResult[0]['bbox'];
-    final left = bbox.left;
-    final top = bbox.top;
-    final right = bbox.right;
-    final bottom = bbox.bottom;
-
-    final originalImage =
+    var drawnOnOriginalImage =
         img_lib.decodeImage(File(_imagePath!).readAsBytesSync())!;
-    final croppedImage = img_lib.copyCrop(
-      originalImage,
-      x: left.toInt(),
-      y: top.toInt(),
-      width: (right - left).toInt(),
-      height: (bottom - top).toInt(),
-    );
+
+    for (final detection in _faceDetectionResults) {
+      final xMin = detection.xMinBox.toInt();
+      final yMin = detection.yMinBox.toInt();
+      final xMax = detection.xMaxBox.toInt();
+      final yMax = detection.yMaxBox.toInt();
+      final leftEyeX = detection.leftEye[0].toInt();
+      final leftEyeY = detection.leftEye[1].toInt();
+      final rightEyeX = detection.rightEye[0].toInt();
+      final rightEyeY = detection.rightEye[1].toInt();
+      devtools.log('Result: $detection');
+
+      // Draw bounding box as rectangle
+      drawnOnOriginalImage = img_lib.drawRect(
+        drawnOnOriginalImage,
+        x1: xMin,
+        y1: yMin,
+        x2: xMax,
+        y2: yMax,
+        color: img_lib.ColorFloat16.rgb(0, 0, 255),
+      );
+
+      // Draw face landmarks as circles
+      drawnOnOriginalImage = img_lib.fillCircle(
+        drawnOnOriginalImage,
+        x: leftEyeX,
+        y: leftEyeY,
+        radius: 4,
+        color: img_lib.ColorFloat16.rgb(255, 0, 0),
+      );
+      drawnOnOriginalImage = img_lib.fillCircle(
+        drawnOnOriginalImage,
+        x: rightEyeX,
+        y: rightEyeY,
+        radius: 4,
+        color: img_lib.ColorFloat16.rgb(255, 0, 0),
+      );
+    }
 
     setState(() {
-      _croppedFace = Image.memory(img_lib.encodeJpg(croppedImage));
+      _imageDrawn = Image.memory(img_lib.encodeJpg(drawnOnOriginalImage));
       _predicting = false;
       _isAnalyzed = true;
     });
@@ -149,29 +174,10 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            // if (_croppedFace != null)
-            //   SizedBox(
-            //     height: 400,
-            //     child: _croppedFace,
-            //   )
-            // else
-            if (_imageWidget != null &&
-                _isAnalyzed) // Only show bounding box when image is analyzed
+            if (_imageDrawn != null && _isAnalyzed)
               SizedBox(
                 height: 400,
-                child: Stack(
-                  children: <Widget>[
-                    _imageWidget!, // Original image
-                    // Draw bounding box
-                    CustomPaint(
-                      painter: FaceDetectionPainter(
-                        bbox: _faceDetectionResult[0]
-                            ['bbox'], // Assuming first result
-                        ratio: 1.0, // Update this ratio based on your needs
-                      ),
-                    ),
-                  ],
-                ),
+                child: _imageDrawn,
               )
             else if (_imageWidget !=
                 null) // Show original image when not analyzed

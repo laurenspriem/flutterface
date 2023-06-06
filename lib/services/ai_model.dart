@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:flutterface/services/face_detection/detection.dart';
 // import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
@@ -18,5 +19,5 @@ abstract class AIModel extends Equatable {
 
   Future<void> loadModel();
   Future<List<List<List<num>>>> getPreprocessedImage(String imagePath);
-  List<Map<String, dynamic>> predict(List<List<List<num>>> imagePath);
+  List<Detection> predict(List<List<List<num>>> imagePath);
 }

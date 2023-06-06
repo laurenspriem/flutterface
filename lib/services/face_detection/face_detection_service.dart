@@ -1,15 +1,14 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
-import 'dart:math';
 
-import 'package:flutter/services.dart';
 import 'package:flutterface/constants/model_file.dart';
 import 'package:flutterface/services/ai_model.dart';
 import 'package:flutterface/services/face_detection/anchors.dart';
+import 'package:flutterface/services/face_detection/detection.dart';
+import 'package:flutterface/services/face_detection/filter_extract_detections.dart';
 import 'package:flutterface/services/face_detection/generate_anchors.dart';
-import 'package:flutterface/services/face_detection/non_maximum_suppression.dart';
+import 'package:flutterface/services/face_detection/naive_non_max_suppression.dart';
 import 'package:flutterface/services/face_detection/options.dart';
-import 'package:flutterface/services/face_detection/process.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
@@ -143,10 +142,10 @@ class FaceDetection extends AIModel {
       throw Exception('Image not found');
     }
 
-    if (Platform.isAndroid) {
-      image = image_lib.copyRotate(image, angle: -90);
-      image = image_lib.flipHorizontal(image);
-    }
+    // if (Platform.isAndroid) {
+    //   image = image_lib.copyRotate(image, angle: -90);
+    //   image = image_lib.flipHorizontal(image);
+    // }
 
     originalImageWidth = image.width;
     originalImageHeight = image.height;
@@ -192,25 +191,15 @@ class FaceDetection extends AIModel {
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter
   @override
-  List<Map<String, dynamic>> predict(List<List<List<num>>> inputImageMatrix) {
+  List<Detection> predict(List<List<List<num>>> inputImageMatrix) {
     assert(interpreter != null);
 
     final options = OptionsFace(
-      numClasses: 1,
       numBoxes: 896,
-      numCoords: 16,
-      keypointCoordOffset: 4,
-      ignoreClasses: [],
-      scoreClippingThresh: 100.0,
-      minScoreThresh: 0.70,
-      numKeypoints: 6,
-      numValuesPerKeypoint: 2,
-      reverseOutputOrder: true,
-      boxCoordOffset: 0,
-      xScale: 128,
-      yScale: 128,
-      hScale: 128,
-      wScale: 128,
+      minScoreSigmoidThreshold: 0.70,
+      iouThreshold: 0.3,
+      inputWidth: 128,
+      inputHeight: 128,
     );
 
     devtools.log('outputShapes: $outputShapes');
@@ -234,7 +223,7 @@ class FaceDetection extends AIModel {
     devtools.log('Interpreter.run is finished');
 
     // Get output tensors
-    final rawBoxes = outputs[0]!; // Nested List of shape [1, 896, 16]
+    final rawBoxes = outputs[0]![0]; // Nested List of shape [896, 16]
     final rawScores = outputs[1]![0]; // Nested List of shape [896, 1]
 
     // Visually inspecting the raw scores
@@ -252,49 +241,38 @@ class FaceDetection extends AIModel {
     final List<dynamic> flatBoxesThirdCoordinates = List.filled(896, 0);
     final List<dynamic> flatBoxesFourthCoordinates = List.filled(896, 0);
     for (var i = 0; i < rawBoxes[0].length; i++) {
-      flatBoxesFirstCoordinates[i] = rawBoxes[0][i][0];
-      flatBoxesSecondCoordinates[i] = rawBoxes[0][i][1];
-      flatBoxesThirdCoordinates[i] = rawBoxes[0][i][2];
-      flatBoxesFourthCoordinates[i] = rawBoxes[0][i][3];
+      flatBoxesFirstCoordinates[i] = rawBoxes[i][0];
+      flatBoxesSecondCoordinates[i] = rawBoxes[i][1];
+      flatBoxesThirdCoordinates[i] = rawBoxes[i][2];
+      flatBoxesFourthCoordinates[i] = rawBoxes[i][3];
     }
     devtools.log('rawBoxesFirstCoordinates: $flatBoxesFirstCoordinates');
 
-    var detections = process(
+    var relativeDetections = filterExtractDetections(
       options: options,
       rawScores: rawScores,
       rawBoxes: rawBoxes,
       anchors: _anchors,
     );
 
-    devtools.log(
-      'Detections: ${detections.sublist(0, min(10, detections.length))}',
+    relativeDetections = naiveNonMaxSuppression(
+      detections: relativeDetections,
+      iouThreshold: options.iouThreshold,
     );
 
-    detections = nonMaximumSuppression(detections, threshold);
-    if (detections.isEmpty) {
+    if (relativeDetections.isEmpty) {
       devtools.log('[log] No face detected');
       return [
-        {'bbox': Rect.zero, 'score': 0.0}
+        Detection.zero(),
       ];
     }
 
-    final rectFaces = <Map<String, dynamic>>[];
+    final absoluteDetections = relativeToAbsoluteDetections(
+      detections: relativeDetections,
+      originalWidth: originalImageWidth,
+      originalHeight: originalImageHeight,
+    );
 
-    for (var detection in detections) {
-      Rect? bbox;
-      final score = detection.score;
-      if (score > threshold) {
-        bbox = Rect.fromLTRB(
-          originalImageWidth * detection.xMin,
-          originalImageHeight * detection.yMin,
-          originalImageWidth * detection.width,
-          originalImageHeight * detection.height,
-        );
-      }
-      rectFaces.add({'bbox': bbox, 'score': score});
-    }
-    rectFaces.sort((a, b) => b['score'].compareTo(a['score']));
-
-    return rectFaces;
+    return absoluteDetections;
   }
 }
