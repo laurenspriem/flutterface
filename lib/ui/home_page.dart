@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/face_detection_service.dart';
+import 'package:flutter/services.dart' show ByteData, rootBundle;
 import 'package:image/image.dart' as img_lib;
 import 'package:image_picker/image_picker.dart';
 
@@ -19,7 +20,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
   String? _imagePath;
-  Image? _imageWidget;
+  Image? _imageOriginal;
   Image? _imageDrawn;
   int _stockImageCounter = 0;
   final List<String> _stockImagePaths = [
@@ -34,28 +35,15 @@ class _HomePageState extends State<HomePage> {
   bool _isModelLoaded = false;
   bool _predicting = false;
   late FaceDetection _faceDetection;
-  List<Detection> _faceDetectionResults =
-      []; // map that contains 'bbox' and 'score'
-
-  @override
-  void initState() {
-    // _modelInferenceService = locator<ModelInferenceService>();
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    // _modelInferenceService.inferenceResults = null;
-    super.dispose();
-  }
+  List<Detection> _faceDetectionResults = [];
 
   void _pickImage() async {
+    cleanResult();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       setState(() {
         _imagePath = image.path;
-        _imageWidget = Image.file(File(_imagePath!));
-        cleanResult();
+        _imageOriginal = Image.file(File(_imagePath!));
       });
     } else {
       devtools.log('No image selected');
@@ -63,18 +51,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _stockImage() async {
+    cleanResult();
     setState(() {
-      // _imageWidget = Image.asset('assets/images/stock_images/one_person.jpeg');
-      _imageWidget = Image.asset(_stockImagePaths[_stockImageCounter]);
+      _imageOriginal = Image.asset(_stockImagePaths[_stockImageCounter]);
       _imagePath = _stockImagePaths[_stockImageCounter];
       _stockImageCounter = (_stockImageCounter + 1) % _stockImagePaths.length;
-      cleanResult();
     });
   }
 
   void cleanResult() {
     _isAnalyzed = false;
-    _faceDetectionResults = [];
+    _faceDetectionResults = <Detection>[];
     _imageDrawn = null;
     setState(() {});
   }
@@ -89,7 +76,7 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
-    assert(_imageWidget != null);
+    assert(_imageOriginal != null);
     if (_isAnalyzed || _predicting) {
       return;
     }
@@ -115,8 +102,17 @@ class _HomePageState extends State<HomePage> {
     devtools.log('Inference results: list $_faceDetectionResults of length '
         '${_faceDetectionResults.length}');
 
-    var drawnOnOriginalImage =
-        img_lib.decodeImage(File(_imagePath!).readAsBytesSync())!;
+    img_lib.Image? drawnOnOriginalImage;
+    if (_imagePath!.startsWith('assets/')) {
+      // Load image as ByteData from asset bundle, then convert to image_lib.Image
+      final ByteData imageData = await rootBundle.load(_imagePath!);
+      drawnOnOriginalImage =
+          img_lib.decodeImage(imageData.buffer.asUint8List());
+    } else {
+      // Read image bytes from file and convert to image_lib.Image
+      final imageData = File(_imagePath!).readAsBytesSync();
+      drawnOnOriginalImage = img_lib.decodeImage(imageData);
+    }
 
     for (final detection in _faceDetectionResults) {
       final xMin = detection.xMinBox.toInt();
@@ -127,11 +123,19 @@ class _HomePageState extends State<HomePage> {
       final leftEyeY = detection.leftEye[1].toInt();
       final rightEyeX = detection.rightEye[0].toInt();
       final rightEyeY = detection.rightEye[1].toInt();
+      final noseX = detection.nose[0].toInt();
+      final noseY = detection.nose[1].toInt();
+      final mouthX = detection.mouth[0].toInt();
+      final mouthY = detection.mouth[1].toInt();
+      final leftEarX = detection.leftEar[0].toInt();
+      final leftEarY = detection.leftEar[1].toInt();
+      final rightEarX = detection.rightEar[0].toInt();
+      final rightEarY = detection.rightEar[1].toInt();
       devtools.log('Result: $detection');
 
       // Draw bounding box as rectangle
       drawnOnOriginalImage = img_lib.drawRect(
-        drawnOnOriginalImage,
+        drawnOnOriginalImage!,
         x1: xMin,
         y1: yMin,
         x2: xMax,
@@ -154,10 +158,38 @@ class _HomePageState extends State<HomePage> {
         radius: 4,
         color: img_lib.ColorFloat16.rgb(255, 0, 0),
       );
+      drawnOnOriginalImage = img_lib.fillCircle(
+        drawnOnOriginalImage,
+        x: noseX,
+        y: noseY,
+        radius: 4,
+        color: img_lib.ColorFloat16.rgb(255, 0, 0),
+      );
+      drawnOnOriginalImage = img_lib.fillCircle(
+        drawnOnOriginalImage,
+        x: mouthX,
+        y: mouthY,
+        radius: 4,
+        color: img_lib.ColorFloat16.rgb(255, 0, 0),
+      );
+      drawnOnOriginalImage = img_lib.fillCircle(
+        drawnOnOriginalImage,
+        x: leftEarX,
+        y: leftEarY,
+        radius: 4,
+        color: img_lib.ColorFloat16.rgb(255, 0, 0),
+      );
+      drawnOnOriginalImage = img_lib.fillCircle(
+        drawnOnOriginalImage,
+        x: rightEarX,
+        y: rightEarY,
+        radius: 4,
+        color: img_lib.ColorFloat16.rgb(255, 0, 0),
+      );
     }
 
     setState(() {
-      _imageDrawn = Image.memory(img_lib.encodeJpg(drawnOnOriginalImage));
+      _imageDrawn = Image.memory(img_lib.encodeJpg(drawnOnOriginalImage!));
       _predicting = false;
       _isAnalyzed = true;
     });
@@ -179,11 +211,11 @@ class _HomePageState extends State<HomePage> {
                 height: 400,
                 child: _imageDrawn,
               )
-            else if (_imageWidget !=
+            else if (_imageOriginal !=
                 null) // Show original image when not analyzed
               SizedBox(
                 height: 400,
-                child: _imageWidget,
+                child: _imageOriginal,
               )
             else
               const Text('No image selected'),

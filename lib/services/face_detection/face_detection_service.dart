@@ -2,18 +2,18 @@ import 'dart:developer' as devtools show log;
 import 'dart:io';
 
 import 'package:flutterface/constants/model_file.dart';
-import 'package:flutterface/services/ai_model.dart';
 import 'package:flutterface/services/face_detection/anchors.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/filter_extract_detections.dart';
 import 'package:flutterface/services/face_detection/generate_anchors.dart';
 import 'package:flutterface/services/face_detection/naive_non_max_suppression.dart';
 import 'package:flutterface/services/face_detection/options.dart';
+import 'package:flutter/services.dart' show ByteData, rootBundle;
 import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 // ignore: must_be_immutable
-class FaceDetection extends AIModel {
+class FaceDetection {
   FaceDetection._();
 
   static Future<FaceDetection> create() async {
@@ -25,13 +25,13 @@ class FaceDetection extends AIModel {
   final int inputSize = 128;
   final double threshold = 0.7;
 
-  @override
+  final outputShapes = <List<int>>[];
+  final outputTypes = <TensorType>[];
+
   Interpreter? interpreter;
 
-  @override
   List<Object> get props => [];
 
-  @override
   int get getAddress => interpreter!.address;
 
   late List<Anchor> _anchors;
@@ -57,7 +57,6 @@ class FaceDetection extends AIModel {
     }
   }
 
-  @override
   Future<void> loadModel() async {
     devtools.log('loadModel is called');
     final anchorOption = AnchorOption(
@@ -123,34 +122,44 @@ class FaceDetection extends AIModel {
     }
   }
 
-  static num normalizePixel(int pixelValue) {
+  static num normalizePixel(num pixelValue) {
     return (pixelValue / 127.5) - 1;
   }
 
-  @override
   Future<List<List<List<num>>>> getPreprocessedImage(String imagePath) async {
     devtools.log('Preprocessing is called');
     assert(imagePath.isNotEmpty);
 
-    // Read image bytes from file
-    final imageData = File(imagePath).readAsBytesSync();
-    // final imageData = await loadImageData(imagePath);
+    image_lib.Image? image;
+    if (imagePath.startsWith('assets/')) {
+      // Load image as ByteData from asset bundle, then convert to image_lib.Image
+      final ByteData imageData = await rootBundle.load(imagePath);
+      image = image_lib.decodeImage(imageData.buffer.asUint8List());
+    } else {
+      // Read image bytes from file and convert to image_lib.Image
+      final imageData = File(imagePath).readAsBytesSync();
+      image = image_lib.decodeImage(imageData);
+    }
 
-    // Decode image using package:image/image.dart (https://pub.dev/image)
-    var image = image_lib.decodeImage(imageData);
     if (image == null) {
       throw Exception('Image not found');
     }
 
-    // if (Platform.isAndroid) {
-    //   image = image_lib.copyRotate(image, angle: -90);
-    //   image = image_lib.flipHorizontal(image);
+    // Read image bytes from file
+    // final imageData = File(imagePath).readAsBytesSync();
+    // final imageData = await loadImageData(imagePath);
+
+    // Decode image using package:image/image.dart (https://pub.dev/image)
+    // final image = image_lib.decodeImage(imageData);
+    // if (image == null) {
+    //   throw Exception('Image not found');
     // }
 
     originalImageWidth = image.width;
     originalImageHeight = image.height;
     devtools.log(
-        'originalImageWidth: $originalImageWidth, originalImageHeight: $originalImageHeight');
+      'originalImageWidth: $originalImageWidth, originalImageHeight: $originalImageHeight',
+    );
 
     // Resize image for model input
     final image_lib.Image imageInput = image_lib.copyResize(
@@ -170,9 +179,9 @@ class FaceDetection extends AIModel {
           final pixel = imageInput.getPixel(x, y);
           // return [pixel.r, pixel.g, pixel.b];
           return [
-            pixel.r / 127.5 - 1, // Normalize the image to range [-1, 1]
-            pixel.g / 127.5 - 1, // Normalize the image to range [-1, 1]
-            pixel.b / 127.5 - 1, // Normalize the image to range [-1, 1]
+            normalizePixel(pixel.r), // Normalize the image to range [-1, 1]
+            normalizePixel(pixel.g), // Normalize the image to range [-1, 1]
+            normalizePixel(pixel.b), // Normalize the image to range [-1, 1]
           ];
         },
       ),
@@ -190,7 +199,6 @@ class FaceDetection extends AIModel {
   }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter
-  @override
   List<Detection> predict(List<List<List<num>>> inputImageMatrix) {
     assert(interpreter != null);
 
@@ -226,27 +234,27 @@ class FaceDetection extends AIModel {
     final rawBoxes = outputs[0]![0]; // Nested List of shape [896, 16]
     final rawScores = outputs[1]![0]; // Nested List of shape [896, 1]
 
-    // Visually inspecting the raw scores
-    final List<dynamic> flatScores = List.filled(896, 0);
-    for (var i = 0; i < rawScores.length; i++) {
-      flatScores[i] = rawScores[i][0];
-    }
-    final flatScoresSorted = flatScores;
-    flatScoresSorted.sort();
-    devtools.log('Ten highest (raw) scores: ${flatScoresSorted.sublist(886)}');
+    // // Visually inspecting the raw scores
+    // final List<dynamic> flatScores = List.filled(896, 0);
+    // for (var i = 0; i < rawScores.length; i++) {
+    //   flatScores[i] = rawScores[i][0];
+    // }
+    // final flatScoresSorted = flatScores;
+    // flatScoresSorted.sort();
+    // devtools.log('Ten highest (raw) scores: ${flatScoresSorted.sublist(886)}');
 
-    // Visually inspecting the raw boxes
-    final List<dynamic> flatBoxesFirstCoordinates = List.filled(896, 0);
-    final List<dynamic> flatBoxesSecondCoordinates = List.filled(896, 0);
-    final List<dynamic> flatBoxesThirdCoordinates = List.filled(896, 0);
-    final List<dynamic> flatBoxesFourthCoordinates = List.filled(896, 0);
-    for (var i = 0; i < rawBoxes[0].length; i++) {
-      flatBoxesFirstCoordinates[i] = rawBoxes[i][0];
-      flatBoxesSecondCoordinates[i] = rawBoxes[i][1];
-      flatBoxesThirdCoordinates[i] = rawBoxes[i][2];
-      flatBoxesFourthCoordinates[i] = rawBoxes[i][3];
-    }
-    devtools.log('rawBoxesFirstCoordinates: $flatBoxesFirstCoordinates');
+    // // Visually inspecting the raw boxes
+    // final List<dynamic> flatBoxesFirstCoordinates = List.filled(896, 0);
+    // final List<dynamic> flatBoxesSecondCoordinates = List.filled(896, 0);
+    // final List<dynamic> flatBoxesThirdCoordinates = List.filled(896, 0);
+    // final List<dynamic> flatBoxesFourthCoordinates = List.filled(896, 0);
+    // for (var i = 0; i < rawBoxes[0].length; i++) {
+    //   flatBoxesFirstCoordinates[i] = rawBoxes[i][0];
+    //   flatBoxesSecondCoordinates[i] = rawBoxes[i][1];
+    //   flatBoxesThirdCoordinates[i] = rawBoxes[i][2];
+    //   flatBoxesFourthCoordinates[i] = rawBoxes[i][3];
+    // }
+    // devtools.log('rawBoxesFirstCoordinates: $flatBoxesFirstCoordinates');
 
     var relativeDetections = filterExtractDetections(
       options: options,
