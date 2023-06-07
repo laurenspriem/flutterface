@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/face_detection_service.dart';
 import 'package:flutter/services.dart' show ByteData, rootBundle;
+import 'package:flutterface/utils/face_detection_painter.dart';
 import 'package:image/image.dart' as img_lib;
 import 'package:image_picker/image_picker.dart';
 
@@ -66,7 +67,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {});
   }
 
-  void analyzeImage() async {
+  void detectFaces() async {
     if (_imagePath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -93,103 +94,15 @@ class _HomePageState extends State<HomePage> {
       _isModelLoaded = true;
     }
 
-    final processedInputImage =
-        await _faceDetection.getPreprocessedImage(_imagePath!);
-
-    _faceDetectionResults = _faceDetection.predict(processedInputImage);
+    _faceDetectionResults = await _faceDetection.predict(_imagePath!);
 
     devtools.log('Inference completed');
     devtools.log('Inference results: list $_faceDetectionResults of length '
         '${_faceDetectionResults.length}');
 
-    img_lib.Image? drawnOnOriginalImage;
-    if (_imagePath!.startsWith('assets/')) {
-      // Load image as ByteData from asset bundle, then convert to image_lib.Image
-      final ByteData imageData = await rootBundle.load(_imagePath!);
-      drawnOnOriginalImage =
-          img_lib.decodeImage(imageData.buffer.asUint8List());
-    } else {
-      // Read image bytes from file and convert to image_lib.Image
-      final imageData = File(_imagePath!).readAsBytesSync();
-      drawnOnOriginalImage = img_lib.decodeImage(imageData);
-    }
-
-    for (final detection in _faceDetectionResults) {
-      final xMin = detection.xMinBox;
-      final yMin = detection.yMinBox;
-      final xMax = detection.xMaxBox;
-      final yMax = detection.yMaxBox;
-      final leftEyeX = detection.leftEye[0];
-      final leftEyeY = detection.leftEye[1];
-      final rightEyeX = detection.rightEye[0];
-      final rightEyeY = detection.rightEye[1];
-      final noseX = detection.nose[0];
-      final noseY = detection.nose[1];
-      final mouthX = detection.mouth[0];
-      final mouthY = detection.mouth[1];
-      final leftEarX = detection.leftEar[0];
-      final leftEarY = detection.leftEar[1];
-      final rightEarX = detection.rightEar[0];
-      final rightEarY = detection.rightEar[1];
-      devtools.log('Result: $detection');
-
-      // Draw bounding box as rectangle
-      drawnOnOriginalImage = img_lib.drawRect(
-        drawnOnOriginalImage!,
-        x1: xMin,
-        y1: yMin,
-        x2: xMax,
-        y2: yMax,
-        color: img_lib.ColorFloat16.rgb(0, 0, 255),
-      );
-
-      // Draw face landmarks as circles
-      drawnOnOriginalImage = img_lib.fillCircle(
-        drawnOnOriginalImage,
-        x: leftEyeX,
-        y: leftEyeY,
-        radius: 4,
-        color: img_lib.ColorFloat16.rgb(255, 0, 0),
-      );
-      drawnOnOriginalImage = img_lib.fillCircle(
-        drawnOnOriginalImage,
-        x: rightEyeX,
-        y: rightEyeY,
-        radius: 4,
-        color: img_lib.ColorFloat16.rgb(255, 0, 0),
-      );
-      drawnOnOriginalImage = img_lib.fillCircle(
-        drawnOnOriginalImage,
-        x: noseX,
-        y: noseY,
-        radius: 4,
-        color: img_lib.ColorFloat16.rgb(255, 0, 0),
-      );
-      drawnOnOriginalImage = img_lib.fillCircle(
-        drawnOnOriginalImage,
-        x: mouthX,
-        y: mouthY,
-        radius: 4,
-        color: img_lib.ColorFloat16.rgb(255, 0, 0),
-      );
-      drawnOnOriginalImage = img_lib.fillCircle(
-        drawnOnOriginalImage,
-        x: leftEarX,
-        y: leftEarY,
-        radius: 4,
-        color: img_lib.ColorFloat16.rgb(255, 0, 0),
-      );
-      drawnOnOriginalImage = img_lib.fillCircle(
-        drawnOnOriginalImage,
-        x: rightEarX,
-        y: rightEarY,
-        radius: 4,
-        color: img_lib.ColorFloat16.rgb(255, 0, 0),
-      );
-    }
+    _imageDrawn = await drawFaces(_imagePath!, _faceDetectionResults);
 
     setState(() {
-      _imageDrawn = Image.memory(img_lib.encodeJpg(drawnOnOriginalImage!));
       _predicting = false;
       _isAnalyzed = true;
     });
@@ -255,7 +168,7 @@ class _HomePageState extends State<HomePage> {
             SizedBox(
               width: 150,
               child: TextButton(
-                onPressed: analyzeImage,
+                onPressed: detectFaces,
                 style: TextButton.styleFrom(
                   foregroundColor:
                       Theme.of(context).colorScheme.onPrimaryContainer,

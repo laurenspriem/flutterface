@@ -143,7 +143,7 @@ class FaceDetection {
           .Interpolation.cubic, // if this is too slow, change to linear
     );
 
-    // Get image matrix representation [128, 128, 3]
+    // Get image matrix representation [inputWidt, inputHeight, 3]
     final imageMatrix = List.generate(
       imageInput.height,
       (y) => List.generate(
@@ -172,13 +172,14 @@ class FaceDetection {
   }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter
-  List<FaceDetectionAbsolute> predict(List<List<List<num>>> inputImageMatrix) {
+  Future<List<FaceDetectionAbsolute>> predict(String imagePath) async {
     assert(interpreter != null);
 
     final faceOptions = config.faceOptions;
-
     devtools.log('outputShapes: $outputShapes');
 
+    final inputImageMatrix =
+        await getPreprocessedImage(imagePath); // [inputWidt, inputHeight, 3]
     final input = [inputImageMatrix];
 
     final outputFaces = createNestedList(outputShapes[0]);
