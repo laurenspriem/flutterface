@@ -1,4 +1,4 @@
-class AnchorOption {
+class AnchorOptions {
   int inputSizeWidth;
   int inputSizeHeight;
   final double minScale;
@@ -14,7 +14,7 @@ class AnchorOption {
   final double interpolatedScaleAspectRatio;
   final bool fixedAnchorSize;
 
-  AnchorOption({
+  AnchorOptions({
     required this.inputSizeWidth,
     required this.inputSizeHeight,
     required this.minScale,

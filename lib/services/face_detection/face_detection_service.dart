@@ -1,48 +1,42 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
-import 'dart:math';
 
-import 'package:flutter/services.dart';
-import 'package:flutterface/constants/model_file.dart';
-import 'package:flutterface/services/ai_model.dart';
+import 'package:flutter/services.dart' show ByteData, rootBundle;
 import 'package:flutterface/services/face_detection/anchors.dart';
+import 'package:flutterface/services/face_detection/detection.dart';
+import 'package:flutterface/services/face_detection/filter_extract_detections.dart';
 import 'package:flutterface/services/face_detection/generate_anchors.dart';
-import 'package:flutterface/services/face_detection/non_maximum_suppression.dart';
-import 'package:flutterface/services/face_detection/options.dart';
-import 'package:flutterface/services/face_detection/process.dart';
+import 'package:flutterface/services/face_detection/model_config.dart';
+import 'package:flutterface/services/face_detection/naive_non_max_suppression.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
-// ignore: must_be_immutable
-class FaceDetection extends AIModel {
-  FaceDetection._();
+class FaceDetection {
+  FaceDetection._({required this.config});
+
+  final ModelConfig config;
 
   static Future<FaceDetection> create() async {
-    final faceDetector = FaceDetection._();
+    // In the line below, we can change the model to use
+    final config =
+        faceDetectionFullRangeDense; // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense;
+    final faceDetector = FaceDetection._(config: config);
     await faceDetector.loadModel();
     return faceDetector;
   }
 
-  final int inputSize = 128;
-  final double threshold = 0.7;
+  final outputShapes = <List<int>>[];
+  final outputTypes = <TensorType>[];
 
-  @override
   Interpreter? interpreter;
 
-  @override
   List<Object> get props => [];
 
-  @override
   int get getAddress => interpreter!.address;
 
   late List<Anchor> _anchors;
   late int originalImageWidth;
   late int originalImageHeight;
-
-  // static Future<Uint8List> loadImageData(String imagePath) async {
-  //   final ByteData imageData = await rootBundle.load(imagePath);
-  //   return imageData.buffer.asUint8List();
-  // }
 
   static List createNestedList(List<int> shape) {
     if (shape.length < 2 || shape.length > 3) {
@@ -58,25 +52,11 @@ class FaceDetection extends AIModel {
     }
   }
 
-  @override
   Future<void> loadModel() async {
     devtools.log('loadModel is called');
-    final anchorOption = AnchorOption(
-      inputSizeHeight: 128,
-      inputSizeWidth: 128,
-      minScale: 0.1484375,
-      maxScale: 0.75,
-      anchorOffsetX: 0.5,
-      anchorOffsetY: 0.5,
-      numLayers: 4,
-      featureMapHeight: [],
-      featureMapWidth: [],
-      strides: [8, 16, 16, 16],
-      aspectRatios: [1.0],
-      reduceBoxesInLowestLayer: false,
-      interpolatedScaleAspectRatio: 1.0,
-      fixedAnchorSize: true,
-    );
+
+    final anchorOption = config.anchorOptions;
+
     try {
       final interpreterOptions = InterpreterOptions();
 
@@ -102,7 +82,7 @@ class FaceDetection extends AIModel {
       // Load model from assets
       interpreter = interpreter ??
           await Interpreter.fromAsset(
-            ModelFile.faceDetectionShortRange,
+            config.modelPath,
             options: interpreterOptions,
           );
 
@@ -124,45 +104,46 @@ class FaceDetection extends AIModel {
     }
   }
 
-  static num normalizePixel(int pixelValue) {
+  static num normalizePixel(num pixelValue) {
     return (pixelValue / 127.5) - 1;
   }
 
-  @override
   Future<List<List<List<num>>>> getPreprocessedImage(String imagePath) async {
     devtools.log('Preprocessing is called');
     assert(imagePath.isNotEmpty);
+    final faceOptions = config.faceOptions;
 
-    // Read image bytes from file
-    final imageData = File(imagePath).readAsBytesSync();
-    // final imageData = await loadImageData(imagePath);
-
-    // Decode image using package:image/image.dart (https://pub.dev/image)
-    var image = image_lib.decodeImage(imageData);
-    if (image == null) {
-      throw Exception('Image not found');
+    image_lib.Image? image;
+    if (imagePath.startsWith('assets/')) {
+      // Load image as ByteData from asset bundle, then convert to image_lib.Image
+      final ByteData imageData = await rootBundle.load(imagePath);
+      image = image_lib.decodeImage(imageData.buffer.asUint8List());
+    } else {
+      // Read image bytes from file and convert to image_lib.Image
+      final imageData = File(imagePath).readAsBytesSync();
+      image = image_lib.decodeImage(imageData);
     }
 
-    if (Platform.isAndroid) {
-      image = image_lib.copyRotate(image, angle: -90);
-      image = image_lib.flipHorizontal(image);
+    if (image == null) {
+      throw Exception('Image not found');
     }
 
     originalImageWidth = image.width;
     originalImageHeight = image.height;
     devtools.log(
-        'originalImageWidth: $originalImageWidth, originalImageHeight: $originalImageHeight');
+      'originalImageWidth: $originalImageWidth, originalImageHeight: $originalImageHeight',
+    );
 
     // Resize image for model input
     final image_lib.Image imageInput = image_lib.copyResize(
       image,
-      width: inputSize,
-      height: inputSize,
+      width: faceOptions.inputWidth,
+      height: faceOptions.inputHeight,
       interpolation: image_lib
           .Interpolation.cubic, // if this is too slow, change to linear
     );
 
-    // Get image matrix representation [128, 128, 3]
+    // Get image matrix representation [inputWidt, inputHeight, 3]
     final imageMatrix = List.generate(
       imageInput.height,
       (y) => List.generate(
@@ -171,9 +152,9 @@ class FaceDetection extends AIModel {
           final pixel = imageInput.getPixel(x, y);
           // return [pixel.r, pixel.g, pixel.b];
           return [
-            pixel.r / 127.5 - 1, // Normalize the image to range [-1, 1]
-            pixel.g / 127.5 - 1, // Normalize the image to range [-1, 1]
-            pixel.b / 127.5 - 1, // Normalize the image to range [-1, 1]
+            normalizePixel(pixel.r), // Normalize the image to range [-1, 1]
+            normalizePixel(pixel.g), // Normalize the image to range [-1, 1]
+            normalizePixel(pixel.b), // Normalize the image to range [-1, 1]
           ];
         },
       ),
@@ -191,30 +172,14 @@ class FaceDetection extends AIModel {
   }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter
-  @override
-  List<Map<String, dynamic>> predict(List<List<List<num>>> inputImageMatrix) {
+  Future<List<FaceDetectionAbsolute>> predict(String imagePath) async {
     assert(interpreter != null);
 
-    final options = OptionsFace(
-      numClasses: 1,
-      numBoxes: 896,
-      numCoords: 16,
-      keypointCoordOffset: 4,
-      ignoreClasses: [],
-      scoreClippingThresh: 100.0,
-      minScoreThresh: 0.70,
-      numKeypoints: 6,
-      numValuesPerKeypoint: 2,
-      reverseOutputOrder: true,
-      boxCoordOffset: 0,
-      xScale: 128,
-      yScale: 128,
-      hScale: 128,
-      wScale: 128,
-    );
-
+    final faceOptions = config.faceOptions;
     devtools.log('outputShapes: $outputShapes');
 
+    final inputImageMatrix =
+        await getPreprocessedImage(imagePath); // [inputWidt, inputHeight, 3]
     final input = [inputImageMatrix];
 
     final outputFaces = createNestedList(outputShapes[0]);
@@ -234,67 +199,56 @@ class FaceDetection extends AIModel {
     devtools.log('Interpreter.run is finished');
 
     // Get output tensors
-    final rawBoxes = outputs[0]!; // Nested List of shape [1, 896, 16]
+    final rawBoxes = outputs[0]![0]; // Nested List of shape [896, 16]
     final rawScores = outputs[1]![0]; // Nested List of shape [896, 1]
 
-    // Visually inspecting the raw scores
-    final List<dynamic> flatScores = List.filled(896, 0);
-    for (var i = 0; i < rawScores.length; i++) {
-      flatScores[i] = rawScores[i][0];
-    }
-    final flatScoresSorted = flatScores;
-    flatScoresSorted.sort();
-    devtools.log('Ten highest (raw) scores: ${flatScoresSorted.sublist(886)}');
+    // // Visually inspecting the raw scores
+    // final List<dynamic> flatScores = List.filled(896, 0);
+    // for (var i = 0; i < rawScores.length; i++) {
+    //   flatScores[i] = rawScores[i][0];
+    // }
+    // final flatScoresSorted = flatScores;
+    // flatScoresSorted.sort();
+    // devtools.log('Ten highest (raw) scores: ${flatScoresSorted.sublist(886)}');
 
-    // Visually inspecting the raw boxes
-    final List<dynamic> flatBoxesFirstCoordinates = List.filled(896, 0);
-    final List<dynamic> flatBoxesSecondCoordinates = List.filled(896, 0);
-    final List<dynamic> flatBoxesThirdCoordinates = List.filled(896, 0);
-    final List<dynamic> flatBoxesFourthCoordinates = List.filled(896, 0);
-    for (var i = 0; i < rawBoxes[0].length; i++) {
-      flatBoxesFirstCoordinates[i] = rawBoxes[0][i][0];
-      flatBoxesSecondCoordinates[i] = rawBoxes[0][i][1];
-      flatBoxesThirdCoordinates[i] = rawBoxes[0][i][2];
-      flatBoxesFourthCoordinates[i] = rawBoxes[0][i][3];
-    }
-    devtools.log('rawBoxesFirstCoordinates: $flatBoxesFirstCoordinates');
+    // // Visually inspecting the raw boxes
+    // final List<dynamic> flatBoxesFirstCoordinates = List.filled(896, 0);
+    // final List<dynamic> flatBoxesSecondCoordinates = List.filled(896, 0);
+    // final List<dynamic> flatBoxesThirdCoordinates = List.filled(896, 0);
+    // final List<dynamic> flatBoxesFourthCoordinates = List.filled(896, 0);
+    // for (var i = 0; i < rawBoxes[0].length; i++) {
+    //   flatBoxesFirstCoordinates[i] = rawBoxes[i][0];
+    //   flatBoxesSecondCoordinates[i] = rawBoxes[i][1];
+    //   flatBoxesThirdCoordinates[i] = rawBoxes[i][2];
+    //   flatBoxesFourthCoordinates[i] = rawBoxes[i][3];
+    // }
+    // devtools.log('rawBoxesFirstCoordinates: $flatBoxesFirstCoordinates');
 
-    var detections = process(
-      options: options,
+    var relativeDetections = filterExtractDetections(
+      options: faceOptions,
       rawScores: rawScores,
       rawBoxes: rawBoxes,
       anchors: _anchors,
     );
 
-    devtools.log(
-      'Detections: ${detections.sublist(0, min(10, detections.length))}',
+    relativeDetections = naiveNonMaxSuppression(
+      detections: relativeDetections,
+      iouThreshold: faceOptions.iouThreshold,
     );
 
-    detections = nonMaximumSuppression(detections, threshold);
-    if (detections.isEmpty) {
+    if (relativeDetections.isEmpty) {
       devtools.log('[log] No face detected');
       return [
-        {'bbox': Rect.zero, 'score': 0.0}
+        FaceDetectionAbsolute.zero(),
       ];
     }
 
-    final rectFaces = <Map<String, dynamic>>[];
+    final absoluteDetections = relativeToAbsoluteDetections(
+      detections: relativeDetections,
+      originalWidth: originalImageWidth,
+      originalHeight: originalImageHeight,
+    );
 
-    for (var detection in detections) {
-      Rect? bbox;
-      final score = detection.score;
-      if (score > threshold) {
-        bbox = Rect.fromLTRB(
-          originalImageWidth * detection.xMin,
-          originalImageHeight * detection.yMin,
-          originalImageWidth * detection.width,
-          originalImageHeight * detection.height,
-        );
-      }
-      rectFaces.add({'bbox': bbox, 'score': score});
-    }
-    rectFaces.sort((a, b) => b['score'].compareTo(a['score']));
-
-    return rectFaces;
+    return absoluteDetections;
   }
 }

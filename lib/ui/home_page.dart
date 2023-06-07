@@ -2,10 +2,10 @@ import 'dart:developer' as devtools show log;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/face_detection_service.dart';
 import 'package:flutterface/utils/face_detection_painter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image/image.dart' as img_lib;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.title});
@@ -19,8 +19,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
   String? _imagePath;
-  Image? _imageWidget;
-  Image? _croppedFace;
+  Image? _imageOriginal;
+  Image? _imageDrawn;
   int _stockImageCounter = 0;
   final List<String> _stockImagePaths = [
     'assets/images/stock_images/one_person.jpeg',
@@ -34,28 +34,15 @@ class _HomePageState extends State<HomePage> {
   bool _isModelLoaded = false;
   bool _predicting = false;
   late FaceDetection _faceDetection;
-  List<Map<String, dynamic>> _faceDetectionResult =
-      []; // map that contains 'bbox' and 'score'
-
-  @override
-  void initState() {
-    // _modelInferenceService = locator<ModelInferenceService>();
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    // _modelInferenceService.inferenceResults = null;
-    super.dispose();
-  }
+  List<FaceDetectionAbsolute> _faceDetectionResults = [];
 
   void _pickImage() async {
+    cleanResult();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       setState(() {
         _imagePath = image.path;
-        _imageWidget = Image.file(File(_imagePath!));
-        cleanResult();
+        _imageOriginal = Image.file(File(_imagePath!));
       });
     } else {
       devtools.log('No image selected');
@@ -63,23 +50,22 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _stockImage() async {
+    cleanResult();
     setState(() {
-      // _imageWidget = Image.asset('assets/images/stock_images/one_person.jpeg');
-      _imageWidget = Image.asset(_stockImagePaths[_stockImageCounter]);
+      _imageOriginal = Image.asset(_stockImagePaths[_stockImageCounter]);
       _imagePath = _stockImagePaths[_stockImageCounter];
       _stockImageCounter = (_stockImageCounter + 1) % _stockImagePaths.length;
-      cleanResult();
     });
   }
 
   void cleanResult() {
     _isAnalyzed = false;
-    _faceDetectionResult = [];
-    _croppedFace = null;
+    _faceDetectionResults = <FaceDetectionAbsolute>[];
+    _imageDrawn = null;
     setState(() {});
   }
 
-  void analyzeImage() async {
+  void detectFaces() async {
     if (_imagePath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -89,7 +75,7 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
-    assert(_imageWidget != null);
+    assert(_imageOriginal != null);
     if (_isAnalyzed || _predicting) {
       return;
     }
@@ -106,33 +92,15 @@ class _HomePageState extends State<HomePage> {
       _isModelLoaded = true;
     }
 
-    final processedInputImage =
-        await _faceDetection.getPreprocessedImage(_imagePath!);
-
-    _faceDetectionResult = _faceDetection.predict(processedInputImage);
+    _faceDetectionResults = await _faceDetection.predict(_imagePath!);
 
     devtools.log('Inference completed');
-    devtools.log('Inference results: list $_faceDetectionResult of length '
-        '${_faceDetectionResult.length}');
+    devtools.log('Inference results: list $_faceDetectionResults of length '
+        '${_faceDetectionResults.length}');
 
-    final bbox = _faceDetectionResult[0]['bbox'];
-    final left = bbox.left;
-    final top = bbox.top;
-    final right = bbox.right;
-    final bottom = bbox.bottom;
-
-    final originalImage =
-        img_lib.decodeImage(File(_imagePath!).readAsBytesSync())!;
-    final croppedImage = img_lib.copyCrop(
-      originalImage,
-      x: left.toInt(),
-      y: top.toInt(),
-      width: (right - left).toInt(),
-      height: (bottom - top).toInt(),
-    );
+    _imageDrawn = await drawFaces(_imagePath!, _faceDetectionResults);
 
     setState(() {
-      _croppedFace = Image.memory(img_lib.encodeJpg(croppedImage));
       _predicting = false;
       _isAnalyzed = true;
     });
@@ -149,35 +117,16 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            // if (_croppedFace != null)
-            //   SizedBox(
-            //     height: 400,
-            //     child: _croppedFace,
-            //   )
-            // else
-            if (_imageWidget != null &&
-                _isAnalyzed) // Only show bounding box when image is analyzed
+            if (_imageDrawn != null && _isAnalyzed)
               SizedBox(
                 height: 400,
-                child: Stack(
-                  children: <Widget>[
-                    _imageWidget!, // Original image
-                    // Draw bounding box
-                    CustomPaint(
-                      painter: FaceDetectionPainter(
-                        bbox: _faceDetectionResult[0]
-                            ['bbox'], // Assuming first result
-                        ratio: 1.0, // Update this ratio based on your needs
-                      ),
-                    ),
-                  ],
-                ),
+                child: _imageDrawn,
               )
-            else if (_imageWidget !=
+            else if (_imageOriginal !=
                 null) // Show original image when not analyzed
               SizedBox(
                 height: 400,
-                child: _imageWidget,
+                child: _imageOriginal,
               )
             else
               const Text('No image selected'),
@@ -217,7 +166,7 @@ class _HomePageState extends State<HomePage> {
             SizedBox(
               width: 150,
               child: TextButton(
-                onPressed: analyzeImage,
+                onPressed: detectFaces,
                 style: TextButton.styleFrom(
                   foregroundColor:
                       Theme.of(context).colorScheme.onPrimaryContainer,
@@ -230,22 +179,24 @@ class _HomePageState extends State<HomePage> {
                 child: const Text('Detect faces'),
               ),
             ),
-            SizedBox(
-              width: 150,
-              child: TextButton(
-                onPressed: cleanResult,
-                style: TextButton.styleFrom(
-                  foregroundColor:
-                      Theme.of(context).colorScheme.onPrimaryContainer,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primaryContainer,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text('Clean result'),
-              ),
-            ),
+            _isAnalyzed
+                ? SizedBox(
+                    width: 150,
+                    child: TextButton(
+                      onPressed: cleanResult,
+                      style: TextButton.styleFrom(
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Clean result'),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ],
         ),
       ),

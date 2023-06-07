@@ -2,7 +2,7 @@ import 'package:scidart/numdart.dart';
 
 import 'anchors.dart';
 
-List<Anchor> generateAnchors(AnchorOption options) {
+List<Anchor> generateAnchors(AnchorOptions options) {
   var _anchors = <Anchor>[];
   if (options.stridesSize != options.numLayers) {
     print('strides_size and num_layers must be equal.');
