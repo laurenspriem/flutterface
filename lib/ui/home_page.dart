@@ -4,9 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/face_detection_service.dart';
-import 'package:flutter/services.dart' show ByteData, rootBundle;
 import 'package:flutterface/utils/face_detection_painter.dart';
-import 'package:image/image.dart' as img_lib;
 import 'package:image_picker/image_picker.dart';
 
 class HomePage extends StatefulWidget {
