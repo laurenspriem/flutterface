@@ -18,7 +18,7 @@ final ModelConfig faceDetectionShortRange = ModelConfig(
   modelPath: ModelFile.faceDetectionShortRange,
   faceOptions: FaceOptions(
     numBoxes: 896,
-    minScoreSigmoidThreshold: 0.70,
+    minScoreSigmoidThreshold: 0.60,
     iouThreshold: 0.3,
     inputWidth: 128,
     inputHeight: 128,
@@ -45,7 +45,7 @@ final ModelConfig faceDetectionFullRangeSparse = ModelConfig(
   modelPath: ModelFile.faceDetectionFullRangeSparse,
   faceOptions: FaceOptions(
     numBoxes: 2304,
-    minScoreSigmoidThreshold: 0.70,
+    minScoreSigmoidThreshold: 0.60,
     iouThreshold: 0.3,
     inputWidth: 192,
     inputHeight: 192,
@@ -72,7 +72,7 @@ final ModelConfig faceDetectionFullRangeDense = ModelConfig(
   modelPath: ModelFile.faceDetectionFullRangeDense,
   faceOptions: FaceOptions(
     numBoxes: 2304,
-    minScoreSigmoidThreshold: 0.70,
+    minScoreSigmoidThreshold: 0.60,
     iouThreshold: 0.3,
     inputWidth: 192,
     inputHeight: 192,
