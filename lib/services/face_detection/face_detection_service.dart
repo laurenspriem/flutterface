@@ -172,7 +172,7 @@ class FaceDetection {
   }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter
-  List<Detection> predict(List<List<List<num>>> inputImageMatrix) {
+  List<FaceDetectionAbsolute> predict(List<List<List<num>>> inputImageMatrix) {
     assert(interpreter != null);
 
     final faceOptions = config.faceOptions;
@@ -238,7 +238,7 @@ class FaceDetection {
     if (relativeDetections.isEmpty) {
       devtools.log('[log] No face detected');
       return [
-        Detection.zero(),
+        FaceDetectionAbsolute.zero(),
       ];
     }
 

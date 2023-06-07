@@ -35,7 +35,7 @@ class _HomePageState extends State<HomePage> {
   bool _isModelLoaded = false;
   bool _predicting = false;
   late FaceDetection _faceDetection;
-  List<Detection> _faceDetectionResults = [];
+  List<FaceDetectionAbsolute> _faceDetectionResults = [];
 
   void _pickImage() async {
     cleanResult();
@@ -61,7 +61,7 @@ class _HomePageState extends State<HomePage> {
 
   void cleanResult() {
     _isAnalyzed = false;
-    _faceDetectionResults = <Detection>[];
+    _faceDetectionResults = <FaceDetectionAbsolute>[];
     _imageDrawn = null;
     setState(() {});
   }
@@ -115,22 +115,22 @@ class _HomePageState extends State<HomePage> {
     }
 
     for (final detection in _faceDetectionResults) {
-      final xMin = detection.xMinBox.toInt();
-      final yMin = detection.yMinBox.toInt();
-      final xMax = detection.xMaxBox.toInt();
-      final yMax = detection.yMaxBox.toInt();
-      final leftEyeX = detection.leftEye[0].toInt();
-      final leftEyeY = detection.leftEye[1].toInt();
-      final rightEyeX = detection.rightEye[0].toInt();
-      final rightEyeY = detection.rightEye[1].toInt();
-      final noseX = detection.nose[0].toInt();
-      final noseY = detection.nose[1].toInt();
-      final mouthX = detection.mouth[0].toInt();
-      final mouthY = detection.mouth[1].toInt();
-      final leftEarX = detection.leftEar[0].toInt();
-      final leftEarY = detection.leftEar[1].toInt();
-      final rightEarX = detection.rightEar[0].toInt();
-      final rightEarY = detection.rightEar[1].toInt();
+      final xMin = detection.xMinBox;
+      final yMin = detection.yMinBox;
+      final xMax = detection.xMaxBox;
+      final yMax = detection.yMaxBox;
+      final leftEyeX = detection.leftEye[0];
+      final leftEyeY = detection.leftEye[1];
+      final rightEyeX = detection.rightEye[0];
+      final rightEyeY = detection.rightEye[1];
+      final noseX = detection.nose[0];
+      final noseY = detection.nose[1];
+      final mouthX = detection.mouth[0];
+      final mouthY = detection.mouth[1];
+      final leftEarX = detection.leftEar[0];
+      final leftEarY = detection.leftEar[1];
+      final rightEarX = detection.rightEar[0];
+      final rightEarY = detection.rightEar[1];
       devtools.log('Result: $detection');
 
       // Draw bounding box as rectangle

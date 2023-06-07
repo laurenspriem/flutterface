@@ -2,8 +2,8 @@ import 'dart:math' as math show max, min;
 
 import 'package:flutterface/services/face_detection/detection.dart';
 
-List<Detection> naiveNonMaxSuppression({
-  required List<Detection> detections,
+List<FaceDetectionRelative> naiveNonMaxSuppression({
+  required List<FaceDetectionRelative> detections,
   required double iouThreshold,
 }) {
   // Sort the detections by score, the highest first
@@ -22,7 +22,8 @@ List<Detection> naiveNonMaxSuppression({
   return detections;
 }
 
-double _calculateIOU(Detection detectionA, Detection detectionB) {
+double _calculateIOU(
+    FaceDetectionRelative detectionA, FaceDetectionRelative detectionB) {
   final areaA = detectionA.width * detectionA.height;
   final areaB = detectionB.width * detectionB.height;
 

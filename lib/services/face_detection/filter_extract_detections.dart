@@ -4,13 +4,13 @@ import 'package:flutterface/services/face_detection/anchors.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/face_options.dart';
 
-List<Detection> filterExtractDetections({
+List<FaceDetectionRelative> filterExtractDetections({
   required FaceOptions options,
   required List<dynamic> rawScores,
   required List<dynamic> rawBoxes,
   required List<Anchor> anchors,
 }) {
-  final outputDetections = <Detection>[];
+  final outputDetections = <FaceDetectionRelative>[];
   for (var i = 0; i < options.numBoxes; i++) {
     // Filter out low scores
     if (rawScores[i][0] < options.inverseSigmoidMinScoreThreshold) continue;
@@ -55,47 +55,14 @@ List<Detection> filterExtractDetections({
       ]);
     }
 
-    final detection = Detection(
+    final detection = FaceDetectionRelative(
       score: score,
       box: box,
       allKeypoints: completeKeyPoints,
-      coordinatesAreAbsolute: false,
     );
 
     outputDetections.add(detection);
   }
 
   return outputDetections;
-}
-
-List<Detection> relativeToAbsoluteDetections({
-  required List<Detection> detections,
-  required int originalWidth,
-  required int originalHeight,
-}) {
-  for (var i = 0; i < detections.length; i++) {
-    final detection = detections[i];
-    final score = detection.score;
-    final box = detection.box;
-    final allKeypoints = detection.allKeypoints;
-
-    box[0] *= originalWidth;
-    box[1] *= originalHeight;
-    box[2] *= originalWidth;
-    box[3] *= originalHeight;
-
-    for (var keypoint in allKeypoints) {
-      keypoint[0] *= originalWidth;
-      keypoint[1] *= originalHeight;
-    }
-
-    detections[i] = Detection(
-      score: score,
-      box: box,
-      allKeypoints: allKeypoints,
-      coordinatesAreAbsolute: true,
-    );
-  }
-
-  return detections;
 }
