@@ -268,22 +268,24 @@ class _HomePageState extends State<HomePage> {
                 child: const Text('Detect faces'),
               ),
             ),
-            SizedBox(
-              width: 150,
-              child: TextButton(
-                onPressed: cleanResult,
-                style: TextButton.styleFrom(
-                  foregroundColor:
-                      Theme.of(context).colorScheme.onPrimaryContainer,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primaryContainer,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text('Clean result'),
-              ),
-            ),
+            _isAnalyzed
+                ? SizedBox(
+                    width: 150,
+                    child: TextButton(
+                      onPressed: cleanResult,
+                      style: TextButton.styleFrom(
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Clean result'),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ],
         ),
       ),
