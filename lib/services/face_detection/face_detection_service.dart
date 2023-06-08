@@ -19,7 +19,7 @@ class FaceDetection {
   static Future<FaceDetection> create() async {
     // In the line below, we can change the model to use
     final config =
-        faceDetectionFullRangeDense; // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense;
+        faceDetectionBackWeb; // faceDetectionFront // faceDetectionBackWeb // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense;
     final faceDetector = FaceDetection._(config: config);
     await faceDetector.loadModel();
     return faceDetector;
