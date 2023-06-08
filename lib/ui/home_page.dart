@@ -163,22 +163,6 @@ class _HomePageState extends State<HomePage> {
                 child: const Text('Stock image'),
               ),
             ),
-            SizedBox(
-              width: 150,
-              child: TextButton(
-                onPressed: detectFaces,
-                style: TextButton.styleFrom(
-                  foregroundColor:
-                      Theme.of(context).colorScheme.onPrimaryContainer,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primaryContainer,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text('Detect faces'),
-              ),
-            ),
             _isAnalyzed
                 ? SizedBox(
                     width: 150,
@@ -196,7 +180,22 @@ class _HomePageState extends State<HomePage> {
                       child: const Text('Clean result'),
                     ),
                   )
-                : const SizedBox.shrink(),
+                : SizedBox(
+                    width: 150,
+                    child: TextButton(
+                      onPressed: detectFaces,
+                      style: TextButton.styleFrom(
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Detect faces'),
+                    ),
+                  ),
           ],
         ),
       ),
