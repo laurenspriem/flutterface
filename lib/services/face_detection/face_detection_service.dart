@@ -1,13 +1,13 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
 
-import 'package:flutter/services.dart' show ByteData, rootBundle;
 import 'package:flutterface/services/face_detection/anchors.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/filter_extract_detections.dart';
 import 'package:flutterface/services/face_detection/generate_anchors.dart';
 import 'package:flutterface/services/face_detection/model_config.dart';
 import 'package:flutterface/services/face_detection/naive_non_max_suppression.dart';
+import 'package:flutterface/utils/image.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
@@ -108,25 +108,10 @@ class FaceDetection {
     return (pixelValue / 127.5) - 1;
   }
 
-  Future<List<List<List<num>>>> getPreprocessedImage(String imagePath) async {
+  Future<List<List<List<num>>>> getPreprocessedImage(
+      image_lib.Image image) async {
     devtools.log('Preprocessing is called');
-    assert(imagePath.isNotEmpty);
     final faceOptions = config.faceOptions;
-
-    image_lib.Image? image;
-    if (imagePath.startsWith('assets/')) {
-      // Load image as ByteData from asset bundle, then convert to image_lib.Image
-      final ByteData imageData = await rootBundle.load(imagePath);
-      image = image_lib.decodeImage(imageData.buffer.asUint8List());
-    } else {
-      // Read image bytes from file and convert to image_lib.Image
-      final imageData = File(imagePath).readAsBytesSync();
-      image = image_lib.decodeImage(imageData);
-    }
-
-    if (image == null) {
-      throw Exception('Image not found');
-    }
 
     originalImageWidth = image.width;
     originalImageHeight = image.height;
@@ -175,11 +160,15 @@ class FaceDetection {
   Future<List<FaceDetectionAbsolute>> predict(String imagePath) async {
     assert(interpreter != null);
 
+    final image = await loadImageImage(imagePath);
+
     final faceOptions = config.faceOptions;
     devtools.log('outputShapes: $outputShapes');
 
+    final stopwatch = Stopwatch()..start();
+
     final inputImageMatrix =
-        await getPreprocessedImage(imagePath); // [inputWidt, inputHeight, 3]
+        await getPreprocessedImage(image); // [inputWidt, inputHeight, 3]
     final input = [inputImageMatrix];
 
     final outputFaces = createNestedList(outputShapes[0]);
@@ -248,6 +237,9 @@ class FaceDetection {
       originalWidth: originalImageWidth,
       originalHeight: originalImageHeight,
     );
+
+    stopwatch.stop();
+    devtools.log('predict() executed in ${stopwatch.elapsedMilliseconds}ms');
 
     return absoluteDetections;
   }
