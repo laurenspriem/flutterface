@@ -22,7 +22,6 @@ class _HomePageState extends State<HomePage> {
   String? _imagePath;
   Image? _imageOriginal;
   Size _imageSize = const Size(0, 0);
-  Image? _imageDrawn;
   int _stockImageCounter = 0;
   final List<String> _stockImagePaths = [
     'assets/images/stock_images/one_person.jpeg',
@@ -72,7 +71,6 @@ class _HomePageState extends State<HomePage> {
   void cleanResult() {
     _isAnalyzed = false;
     _faceDetectionResults = <FaceDetectionAbsolute>[];
-    _imageDrawn = null;
     setState(() {});
   }
 
