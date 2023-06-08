@@ -94,3 +94,57 @@ final ModelConfig faceDetectionFullRangeDense = ModelConfig(
     fixedAnchorSize: true,
   ),
 );
+
+final ModelConfig faceDetectionFront = ModelConfig(
+  modelPath: ModelFile.faceDetectionFront,
+  faceOptions: FaceOptions(
+    numBoxes: 896,
+    minScoreSigmoidThreshold: 0.60,
+    iouThreshold: 0.3,
+    inputWidth: 128,
+    inputHeight: 128,
+  ),
+  anchorOptions: AnchorOptions(
+    inputSizeHeight: 128,
+    inputSizeWidth: 128,
+    minScale: 0.1484375,
+    maxScale: 0.75,
+    anchorOffsetX: 0.5,
+    anchorOffsetY: 0.5,
+    numLayers: 4,
+    featureMapHeight: [],
+    featureMapWidth: [],
+    strides: [8, 16, 16, 16],
+    aspectRatios: [1.0],
+    reduceBoxesInLowestLayer: false,
+    interpolatedScaleAspectRatio: 1.0,
+    fixedAnchorSize: true,
+  ),
+);
+
+final ModelConfig faceDetectionBackWeb = ModelConfig(
+  modelPath: ModelFile.faceDetectionBackWeb,
+  faceOptions: FaceOptions(
+    numBoxes: 896,
+    minScoreSigmoidThreshold: 0.60,
+    iouThreshold: 0.3,
+    inputWidth: 256,
+    inputHeight: 256,
+  ),
+  anchorOptions: AnchorOptions(
+    inputSizeHeight: 256,
+    inputSizeWidth: 256,
+    minScale: 0.15625,
+    maxScale: 0.75,
+    anchorOffsetX: 0.5,
+    anchorOffsetY: 0.5,
+    numLayers: 4,
+    featureMapHeight: [],
+    featureMapWidth: [],
+    strides: [16, 32, 32, 32],
+    aspectRatios: [1.0],
+    reduceBoxesInLowestLayer: false,
+    interpolatedScaleAspectRatio: 1.0,
+    fixedAnchorSize: true,
+  ),
+);
