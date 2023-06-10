@@ -116,6 +116,8 @@ class FaceDetectionAbsolute extends Detection {
     return 'FaceDetectionRelative( with relative coordinates: \n score: $score \n Box: xMinBox: $xMinBox, yMinBox: $yMinBox, xMaxBox: $xMaxBox, yMaxBox: $yMaxBox, \n Keypoints: leftEye: $leftEye, rightEye: $rightEye, nose: $nose, mouth: $mouth, leftEar: $leftEar, rightEar: $rightEar \n )';
   }
 
+  static FaceDetectionAbsolute empty = FaceDetectionAbsolute.zero();
+
   @override
   int get width => xMaxBox - xMinBox;
   @override

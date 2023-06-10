@@ -2,6 +2,7 @@ import 'dart:developer' as devtools show log;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/face_detection_service.dart';
 import 'package:flutterface/utils/face_detection_painter.dart';
@@ -20,7 +21,7 @@ class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
   String? _imagePath;
   Image? _imageOriginal;
-  Image? _imageDrawn;
+  Size _imageSize = const Size(0, 0);
   int _stockImageCounter = 0;
   final List<String> _stockImagePaths = [
     'assets/images/stock_images/one_person.jpeg',
@@ -40,9 +41,12 @@ class _HomePageState extends State<HomePage> {
     cleanResult();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
+      final decodedImage = await decodeImageFromList(await image.readAsBytes());
       setState(() {
         _imagePath = image.path;
         _imageOriginal = Image.file(File(_imagePath!));
+        _imageSize =
+            Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
       });
     } else {
       devtools.log('No image selected');
@@ -51,8 +55,14 @@ class _HomePageState extends State<HomePage> {
 
   void _stockImage() async {
     cleanResult();
+    final byteData =
+        await rootBundle.load(_stockImagePaths[_stockImageCounter]);
+    final decodedImage =
+        await decodeImageFromList(byteData.buffer.asUint8List());
     setState(() {
       _imageOriginal = Image.asset(_stockImagePaths[_stockImageCounter]);
+      _imageSize =
+          Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
       _imagePath = _stockImagePaths[_stockImageCounter];
       _stockImageCounter = (_stockImageCounter + 1) % _stockImagePaths.length;
     });
@@ -61,7 +71,6 @@ class _HomePageState extends State<HomePage> {
   void cleanResult() {
     _isAnalyzed = false;
     _faceDetectionResults = <FaceDetectionAbsolute>[];
-    _imageDrawn = null;
     setState(() {});
   }
 
@@ -98,8 +107,6 @@ class _HomePageState extends State<HomePage> {
     devtools.log('Inference results: list $_faceDetectionResults of length '
         '${_faceDetectionResults.length}');
 
-    _imageDrawn = await drawFaces(_imagePath!, _faceDetectionResults);
-
     setState(() {
       _predicting = false;
       _isAnalyzed = true;
@@ -117,19 +124,25 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            if (_imageDrawn != null && _isAnalyzed)
-              SizedBox(
-                height: 400,
-                child: _imageDrawn,
-              )
-            else if (_imageOriginal !=
-                null) // Show original image when not analyzed
-              SizedBox(
-                height: 400,
-                child: _imageOriginal,
-              )
-            else
-              const Text('No image selected'),
+            SizedBox(
+              height: 400,
+              child: _imageOriginal != null
+                  ? Stack(
+                      children: [
+                        _imageOriginal!,
+                        if (_isAnalyzed)
+                          CustomPaint(
+                            painter: FacePainter(
+                              faceDetections: _faceDetectionResults,
+                              imageSize: _imageSize,
+                              availableSize:
+                                  Size(MediaQuery.of(context).size.width, 400),
+                            ),
+                          ),
+                      ],
+                    )
+                  : const Text('No image selected'),
+            ),
             const SizedBox(height: 16),
             SizedBox(
               width: 150,
@@ -163,39 +176,24 @@ class _HomePageState extends State<HomePage> {
                 child: const Text('Stock image'),
               ),
             ),
-            _isAnalyzed
-                ? SizedBox(
-                    width: 150,
-                    child: TextButton(
-                      onPressed: cleanResult,
-                      style: TextButton.styleFrom(
-                        foregroundColor:
-                            Theme.of(context).colorScheme.onPrimaryContainer,
-                        backgroundColor:
-                            Theme.of(context).colorScheme.primaryContainer,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text('Clean result'),
-                    ),
-                  )
-                : SizedBox(
-                    width: 150,
-                    child: TextButton(
-                      onPressed: detectFaces,
-                      style: TextButton.styleFrom(
-                        foregroundColor:
-                            Theme.of(context).colorScheme.onPrimaryContainer,
-                        backgroundColor:
-                            Theme.of(context).colorScheme.primaryContainer,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text('Detect faces'),
-                    ),
+            SizedBox(
+              width: 150,
+              child: TextButton(
+                onPressed: _isAnalyzed ? cleanResult : detectFaces,
+                style: TextButton.styleFrom(
+                  foregroundColor:
+                      Theme.of(context).colorScheme.onPrimaryContainer,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                ),
+                child: _isAnalyzed
+                    ? const Text('Clean result')
+                    : const Text('Detect faces'),
+              ),
+            )
           ],
         ),
       ),
