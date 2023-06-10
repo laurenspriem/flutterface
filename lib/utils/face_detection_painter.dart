@@ -1,11 +1,17 @@
+import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
 
 class FacePainter extends CustomPainter {
   final List<FaceDetectionAbsolute> faceDetections;
   final Size imageSize;
+  final Size availableSize;
 
-  FacePainter({required this.faceDetections, required this.imageSize});
+  FacePainter({
+    required this.faceDetections,
+    required this.imageSize,
+    required this.availableSize,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -14,21 +20,18 @@ class FacePainter extends CustomPainter {
       ..strokeWidth = 3.0
       ..color = Colors.blue;
 
-    double scaleY = 1;
-    double scaleX = 1;
-    if (imageSize.height > 400) {
-      scaleY = 400 / imageSize.height;
-      scaleX = scaleY;
-    }
+    final scaleY = availableSize.height / imageSize.height;
+    final scaleX = availableSize.width / imageSize.width;
+    final scale = min(1, min(scaleX, scaleY));
 
     for (var face in faceDetections) {
       // Draw bounding box
       canvas.drawRect(
         Rect.fromLTRB(
-          face.xMinBox.toDouble() * scaleX,
-          face.yMinBox.toDouble() * scaleY,
-          face.xMaxBox.toDouble() * scaleX,
-          face.yMaxBox.toDouble() * scaleY,
+          face.xMinBox.toDouble() * scale,
+          face.yMinBox.toDouble() * scale,
+          face.xMaxBox.toDouble() * scale,
+          face.yMaxBox.toDouble() * scale,
         ),
         boundingBoxPaint,
       );
@@ -42,8 +45,8 @@ class FacePainter extends CustomPainter {
       for (var keypoint in allKeypoints) {
         canvas.drawCircle(
           Offset(
-            keypoint[0].toDouble() * scaleX,
-            keypoint[1].toDouble() * scaleY,
+            keypoint[0].toDouble() * scale,
+            keypoint[1].toDouble() * scale,
           ),
           4.0,
           keypointPaint,

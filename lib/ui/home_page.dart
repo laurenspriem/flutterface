@@ -135,6 +135,8 @@ class _HomePageState extends State<HomePage> {
                             painter: FacePainter(
                               faceDetections: _faceDetectionResults,
                               imageSize: _imageSize,
+                              availableSize:
+                                  Size(MediaQuery.of(context).size.width, 400),
                             ),
                           ),
                       ],
