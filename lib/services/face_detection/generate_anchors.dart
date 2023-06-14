@@ -1,25 +1,30 @@
+import 'dart:developer' as devtools show log;
 import 'dart:math' as math show sqrt;
 
 import 'package:flutterface/services/face_detection/anchors.dart';
 
 List<Anchor> generateAnchors(AnchorOptions options) {
-  var _anchors = <Anchor>[];
+  final anchors = <Anchor>[];
   if (options.stridesSize != options.numLayers) {
-    print('strides_size and num_layers must be equal.');
+    devtools.log('strides_size and num_layers must be equal.');
     return [];
   }
   var layerID = 0;
   while (layerID < options.numLayers) {
-    var anchorHeight = <double>[];
-    var anchorWidth = <double>[];
-    var aspectRatios = <double>[];
-    var scales = <double>[];
+    final anchorHeight = <double>[];
+    final anchorWidth = <double>[];
+    final aspectRatios = <double>[];
+    final scales = <double>[];
 
     var lastSameStrideLayer = layerID;
     while (lastSameStrideLayer < options.stridesSize &&
         options.strides[lastSameStrideLayer] == options.strides[layerID]) {
-      var scale = _calculateScale(options.minScale, options.maxScale,
-          lastSameStrideLayer, options.stridesSize);
+      final scale = _calculateScale(
+        options.minScale,
+        options.maxScale,
+        lastSameStrideLayer,
+        options.stridesSize,
+      );
 
       if (lastSameStrideLayer == 0 && options.reduceBoxesInLowestLayer) {
         aspectRatios.add(1.0);
@@ -37,7 +42,7 @@ List<Anchor> generateAnchors(AnchorOptions options) {
         }
 
         if (options.interpolatedScaleAspectRatio > 0.0) {
-          var scaleNext = (lastSameStrideLayer == options.stridesSize - 1)
+          final scaleNext = (lastSameStrideLayer == options.stridesSize - 1)
               ? 1.0
               : _calculateScale(
                   options.minScale,
@@ -53,7 +58,7 @@ List<Anchor> generateAnchors(AnchorOptions options) {
     }
 
     for (var i = 0; i < aspectRatios.length; i++) {
-      var ratioSQRT = math.sqrt(aspectRatios[i]);
+      final ratioSQRT = math.sqrt(aspectRatios[i]);
       anchorHeight.add(scales[i] / ratioSQRT);
       anchorWidth.add(scales[i] * ratioSQRT);
     }
@@ -63,7 +68,7 @@ List<Anchor> generateAnchors(AnchorOptions options) {
       featureMapHeight = options.featureMapHeight[layerID];
       featureMapWidth = options.featureMapWidth[layerID];
     } else {
-      var stride = options.strides[layerID];
+      final stride = options.strides[layerID];
       featureMapHeight = (1.0 * options.inputSizeHeight / stride).ceil();
       featureMapWidth = (1.0 * options.inputSizeWidth / stride).ceil();
     }
@@ -71,8 +76,8 @@ List<Anchor> generateAnchors(AnchorOptions options) {
     for (var y = 0; y < featureMapHeight; y++) {
       for (var x = 0; x < featureMapWidth; x++) {
         for (var anchorID = 0; anchorID < anchorHeight.length; anchorID++) {
-          var xCenter = (x + options.anchorOffsetX) * 1.0 / featureMapWidth;
-          var yCenter = (y + options.anchorOffsetY) * 1.0 / featureMapHeight;
+          final xCenter = (x + options.anchorOffsetX) * 1.0 / featureMapWidth;
+          final yCenter = (y + options.anchorOffsetY) * 1.0 / featureMapHeight;
 
           var w = 0.0;
           var h = 0.0;
@@ -83,13 +88,13 @@ List<Anchor> generateAnchors(AnchorOptions options) {
             w = anchorWidth[anchorID];
             h = anchorHeight[anchorID];
           }
-          _anchors.add(Anchor(xCenter, yCenter, h, w));
+          anchors.add(Anchor(xCenter, yCenter, h, w));
         }
       }
     }
     layerID = lastSameStrideLayer;
   }
-  return _anchors;
+  return anchors;
 }
 
 double _calculateScale(
