@@ -23,7 +23,6 @@ dependencies:
   # camera: ^0.10.5+2
   # get_it: ^7.6.0
   equatable: ^2.0.5
-  scidart: ^0.0.2-dev.12
   
   
 

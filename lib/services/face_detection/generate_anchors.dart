@@ -1,6 +1,6 @@
-import 'package:scidart/numdart.dart';
+import 'dart:math' as math show sqrt;
 
-import 'anchors.dart';
+import 'package:flutterface/services/face_detection/anchors.dart';
 
 List<Anchor> generateAnchors(AnchorOptions options) {
   var _anchors = <Anchor>[];
@@ -45,7 +45,7 @@ List<Anchor> generateAnchors(AnchorOptions options) {
                   lastSameStrideLayer + 1,
                   options.stridesSize,
                 );
-          scales.add(sqrt(scale * scaleNext));
+          scales.add(math.sqrt(scale * scaleNext));
           aspectRatios.add(options.interpolatedScaleAspectRatio);
         }
       }
@@ -53,7 +53,7 @@ List<Anchor> generateAnchors(AnchorOptions options) {
     }
 
     for (var i = 0; i < aspectRatios.length; i++) {
-      var ratioSQRT = sqrt(aspectRatios[i]);
+      var ratioSQRT = math.sqrt(aspectRatios[i]);
       anchorHeight.add(scales[i] / ratioSQRT);
       anchorWidth.add(scales[i] * ratioSQRT);
     }
