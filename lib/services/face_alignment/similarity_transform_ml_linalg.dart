@@ -1,6 +1,5 @@
-import 'dart:math' as math;
+import 'dart:math' as math show sin, cos, atan2, sqrt, pow;
 
-import 'package:matrix2d/matrix2d.dart';
 import 'package:ml_linalg/linalg.dart';
 
 class SimilarityTransform {
@@ -44,9 +43,9 @@ class SimilarityTransform {
     var T = Matrix.identity(dim + 1);
 
     final svdResult = _svd(A);
-    final U = svdResult['U']!;
-    final S = svdResult['S']!;
-    final V = svdResult['V']!;
+    final Matrix U = svdResult['U']!;
+    final Vector S = svdResult['S']!;
+    final Matrix V = svdResult['V']!;
 
     // Eq. (40) and (43).
     final rank = _matrixRank(A);
@@ -54,37 +53,32 @@ class SimilarityTransform {
       return T * double.nan;
     } else if (rank == dim - 1) {
       if (_determinant(U) * _determinant(V) > 0) {
-        T = T.setValues(0, dim, 0, dim, U * V);
-        // final uv = U * V;
-        // final uvAddedColumn =
-        //     uv.insertColumns(uv.columnCount, [Vector.zero(uv.rowCount)]);
-        // final lastRow = List<double>.filled(uv.columnCount, 0);
-        // lastRow[lastRow.length - 1] = 1;
-        // T = uvAddedColumn.appendRow(lastRow);
+        T = T.setSubMatrix(0, dim, 0, dim, U * V);
       } else {
         final s = d[dim - 1];
         d = d.set(dim - 1, -1);
-        T = T.setValues(0, dim, 0, dim, U * Matrix.diagonal(d.toList()));
+        final replacement = U * Matrix.diagonal(d.toList()) * V;
+        T = T.setSubMatrix(0, dim, 0, dim, replacement);
         d = d.set(dim - 1, s);
       }
     } else {
-      T = T.setValues(0, dim, 0, dim, U * Matrix.diagonal(d.toList()));
+      final replacement = U * Matrix.diagonal(d.toList()) * V;
+      T = T.setSubMatrix(0, dim, 0, dim, replacement);
     }
 
     var scale = 1.0;
     if (estimateScale) {
       // Eq. (41) and (42).
-      final srcDemeanVarSum = srcDemean.variance(Axis.columns).sum();
-      final Sd = (S * d).asFlattenedList.sum();
-      scale = 1.0 / srcDemeanVarSum * Sd;
+      scale = 1.0 / srcDemean.variance(Axis.columns).sum() * (S * d).sum();
     }
 
     final subTIndices = Iterable<int>.generate(dim, (index) => index);
     final subT = T.sample(rowIndices: subTIndices, columnIndices: subTIndices);
     final newSubT = dstMean - (subT * srcMean) * scale;
-    T = T.setValues(0, dim, 0, dim, Matrix.fromColumns([newSubT]));
-    final newNewSubT = T.sample(rowIndices: subTIndices, columnIndices: subTIndices) * scale;
-    T = T.setValues(0, dim, 0, dim, newNewSubT);
+    T = T.setValues(0, dim, dim, dim+1, newSubT); // TODO: There is a bug here, the last row is not set correctly
+    final newNewSubT =
+        T.sample(rowIndices: subTIndices, columnIndices: subTIndices) * scale;
+    T = T.setSubMatrix(0, dim, 0, dim, newNewSubT);
 
     return T;
   }
@@ -105,13 +99,13 @@ class SimilarityTransform {
 
   static int _matrixRank(Matrix m) {
     final svdResult = _svd(m);
-    final S = svdResult['S']!;
-    final rank = S.asFlattenedList.where((element) => element > 1e-10).length;
+    final Vector S = svdResult['S']!;
+    final rank = S.toList().where((element) => element > 1e-10).length;
     return rank;
   }
 
-  /// Computes the singular value decomposition of a matrix, using https://lucidar.me/en/mathematics/singular-value-decomposition-of-a-2x2-matrix/
-  static Map<String, Matrix> _svd(Matrix m) {
+  /// Computes the singular value decomposition of a matrix, using https://lucidar.me/en/mathematics/singular-value-decomposition-of-a-2x2-matrix/ as reference, but with slightly different signs for the second columns of U and V
+  static Map<String, dynamic> _svd(Matrix m) {
     if (m.rowCount != 2 || m.columnCount != 2) {
       throw Exception('Matrix must be 2x2');
     }
@@ -124,8 +118,8 @@ class SimilarityTransform {
     final tempCalc = a * a + b * b - c * c - d * d;
     final theta = 0.5 * math.atan2(2 * a * c + 2 * b * d, tempCalc);
     final U = Matrix.fromList([
-      [math.cos(theta), -math.sin(theta)],
-      [math.sin(theta), math.cos(theta)],
+      [math.cos(theta), math.sin(theta)],
+      [math.sin(theta), -math.cos(theta)],
     ]);
 
     // Computation of S matrix
@@ -136,10 +130,7 @@ class SimilarityTransform {
         math.sqrt(math.pow(tempCalc, 2) + 4 * math.pow(a * c + b * d, 2));
     final sigma1 = math.sqrt((S1 + S2) / 2);
     final sigma2 = math.sqrt((S1 - S2) / 2);
-    final S = Matrix.fromList([
-      [sigma1, 0],
-      [0, sigma2],
-    ]);
+    final S = Vector.fromList([sigma1, sigma2]);
 
     // Computation of V matrix
     final tempCalc2 = a * a - b * b + c * c - d * d;
@@ -149,8 +140,8 @@ class SimilarityTransform {
     final s22 = (a * math.sin(theta) - c * math.cos(theta)) * math.sin(phi) +
         (-b * math.sin(theta) + d * math.cos(theta)) * math.cos(phi);
     final V = Matrix.fromList([
-      [s11.sign * math.cos(phi), -s22.sign * math.sin(phi)],
-      [s11.sign * math.sin(phi), s22.sign * math.cos(phi)],
+      [s11.sign * math.cos(phi), s22.sign * math.sin(phi)],
+      [s11.sign * math.sin(phi), -s22.sign * math.cos(phi)],
     ]);
 
     return {
@@ -188,7 +179,7 @@ extension SetVectorValues on Vector {
 }
 
 extension ChangeMatrixValues on Matrix {
-  Matrix setValues(
+  Matrix setSubMatrix(
     int startRow,
     int endRow,
     int startColumn,
@@ -199,22 +190,55 @@ extension ChangeMatrixValues on Matrix {
       throw Exception('New values cannot have more rows than original matrix');
     } else if (values.elementAt(0).length > columnCount) {
       throw Exception(
-          'New values cannot have more columns than original matrix');
+        'New values cannot have more columns than original matrix',
+      );
     } else if (endRow - startRow != values.length) {
       throw Exception('Values (number of rows) must be same length as range');
     } else if (endColumn - startColumn != values.elementAt(0).length) {
       throw Exception(
-          'Values (number of columns) must be same length as range');
+        'Values (number of columns) must be same length as range',
+      );
     } else if (startRow < 0 ||
         endRow > rowCount ||
         startColumn < 0 ||
         endColumn > columnCount) {
       throw Exception('Range must be within matrix');
     }
-    final tempList = asFlattenedList;
+    final tempList = asFlattenedList.toList(); // You need `.toList()` here to make sure the list is growable, otherwise `replaceRange` will throw an error
     for (var i = startRow; i < endRow; i++) {
-      tempList.replaceRange(i * columnCount + startColumn,
-          i * columnCount + endColumn, values.elementAt(i).toList());
+      tempList.replaceRange(
+        i * columnCount + startColumn,
+        i * columnCount + endColumn,
+        values.elementAt(i).toList(),
+      );
+    }
+    final newMatrix = Matrix.fromFlattenedList(tempList, rowCount, columnCount);
+    return newMatrix;
+  }
+
+  Matrix setValues(
+    int startRow,
+    int endRow,
+    int startColumn,
+    int endColumn,
+    Iterable<double> values,
+  ) {
+    if ((startRow - endRow) * (startColumn - endColumn) != values.length) {
+      throw Exception('Values must be same length as range');
+    } else if (startRow < 0 ||
+        endRow > rowCount ||
+        startColumn < 0 ||
+        endColumn > columnCount) {
+      throw Exception('Range must be within matrix');
+    }
+
+    final tempList = asFlattenedList.toList(); // You need `.toList()` here to make sure the list is growable, otherwise `replaceRange` will throw an error
+    var index = 0;
+    for (var i = startRow; i < endRow; i++) {
+      for (var j = startColumn; j < endColumn; j++) {
+        tempList[i * columnCount + j] = values.elementAt(index);
+        index++;
+      }
     }
     final newMatrix = Matrix.fromFlattenedList(tempList, rowCount, columnCount);
     return newMatrix;
