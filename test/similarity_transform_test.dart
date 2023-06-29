@@ -6,26 +6,21 @@ import 'package:test/test.dart';
 
 // run `dart test test/similarity_transform_test.dart ` to test
 void main() {
-  final lmk = [
-    <double>[103, 114],
-    <double>[147, 111],
-    <double>[129, 142],
-    <double>[128, 160],
+  final exampleLandmarks = [
+    <int>[103, 114],
+    <int>[147, 111],
+    <int>[129, 142],
+    <int>[128, 160],
   ];
-  final dst = [
-    <double>[38.2946, 51.6963],
-    <double>[73.5318, 51.5014],
-    <double>[56.0252, 71.7366],
-    <double>[56.1396, 92.2848],
-  ];
-  final tform = SimilarityTransform();
-  final isNoNanInParam = tform.estimate(lmk, dst);
-  final parameters = tform.params;
   final expectedParameters = Matrix.fromList([
     [0.81073804, -0.05217403, -39.88931937],
     [0.05217403, 0.81073804, -46.62302376],
     [0, 0, 1]
   ]);
+
+  final tform = SimilarityTransform();
+  final isNoNanInParam = tform.estimate(exampleLandmarks);
+  final parameters = tform.params;
 
   group('Similarity Transform Test', () {
     for (var i = 0; i < parameters.rowCount; i++) {
@@ -44,6 +39,41 @@ void main() {
     devtools.log('isNoNanInParam: $isNoNanInParam');
     test('isNoNanInParam test', () {
       expect(isNoNanInParam, isTrue);
+    });
+
+    // Let's clean the parameters and test again.
+    tform.cleanParams();
+    final parametersAfterClean = tform.params;
+    test('cleanParams test', () {
+      expect(
+        parametersAfterClean,
+        equals(
+          Matrix.fromList([
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0, 0, 1]
+          ]),
+        ),
+      );
+    });
+    final secondIsNoNanInParam = tform.estimate(exampleLandmarks);
+    final secondParameters = tform.params;
+
+    for (var i = 0; i < secondParameters.rowCount; i++) {
+      for (var j = 0; j < secondParameters.columnCount; j++) {
+        final actual = secondParameters[i][j];
+        final expected = expectedParameters[i][j];
+        devtools.log('actual: $actual, expected: $expected');
+        test(
+            'Test parameter estimation AFTER cleaning of SimilarityTransform at [$i, $j] in parameter matrix',
+            () {
+          expect(actual, closeTo(expected, 1e-4));
+        });
+      }
+    }
+    devtools.log('isNoNanInParam AFTER cleaning: $secondIsNoNanInParam');
+    test('isNoNanInParam test AFTER cleaning', () {
+      expect(secondIsNoNanInParam, isTrue);
     });
   });
 }

@@ -2,10 +2,30 @@ import 'package:flutterface/extensions/ml_linalg_extensions.dart';
 import 'package:ml_linalg/linalg.dart';
 
 class SimilarityTransform {
-  late Matrix params;
+  var params = Matrix.fromList([
+    [1.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0],
+    [0, 0, 1]
+  ]);
+  final arcface = [
+    <double>[38.2946, 51.6963],
+    <double>[73.5318, 51.5014],
+    <double>[56.0252, 71.7366],
+    <double>[56.1396, 92.2848],
+  ];
 
-  bool estimate(List<List<double>> src, List<List<double>> dst) {
-    params = _umeyama(src, dst, true);
+  SimilarityTransform();
+
+  void cleanParams() {
+    params = Matrix.fromList([
+      [1.0, 0.0, 0.0],
+      [0.0, 1.0, 0.0],
+      [0, 0, 1]
+    ]);
+  }
+
+  bool estimate(List<List<int>> src) {
+    params = _umeyama(src, arcface, true);
     // We check for NaN in the transformation matrix params.
     final isNoNanInParam =
         !params.asFlattenedList.any((element) => element.isNaN);
@@ -13,11 +33,11 @@ class SimilarityTransform {
   }
 
   static Matrix _umeyama(
-    List<List<double>> src,
+    List<List<int>> src,
     List<List<double>> dst,
     bool estimateScale,
   ) {
-    final srcMat = Matrix.fromList(src);
+    final srcMat = Matrix.fromList(src.map((list) => list.map((value) => value.toDouble()).toList()).toList());
     final dstMat = Matrix.fromList(dst);
     final num = srcMat.rowCount;
     final dim = srcMat.columnCount;
