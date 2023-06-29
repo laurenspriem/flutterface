@@ -56,13 +56,26 @@ void main() {
         ),
       );
     });
-    final secondIsNoNanInParam = tform.estimate(exampleLandmarks);
+
+    // Let's test again after cleaning.
+    final secondExampleLandmarks = [
+      <int>[107, 113],
+      <int>[147, 116],
+      <int>[128, 137],
+      <int>[127, 155],
+    ];
+    final secondExpectedParameters = Matrix.fromList([
+      [9.42784402e-01, 2.96919308e-02, -6.78388902e+01],
+      [-2.96919308e-02, 9.42784402e-01, -5.22145987e+01],
+      [0, 0, 1],
+    ]);
+    final secondIsNoNanInParam = tform.estimate(secondExampleLandmarks);
     final secondParameters = tform.params;
 
     for (var i = 0; i < secondParameters.rowCount; i++) {
       for (var j = 0; j < secondParameters.columnCount; j++) {
         final actual = secondParameters[i][j];
-        final expected = expectedParameters[i][j];
+        final expected = secondExpectedParameters[i][j];
         devtools.log('actual: $actual, expected: $expected');
         test(
             'Test parameter estimation AFTER cleaning of SimilarityTransform at [$i, $j] in parameter matrix',
