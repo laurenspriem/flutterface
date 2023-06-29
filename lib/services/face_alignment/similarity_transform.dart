@@ -1,4 +1,8 @@
+import 'dart:developer' as devtools show log;
+import 'dart:typed_data' show Uint8List;
+
 import 'package:flutterface/extensions/ml_linalg_extensions.dart';
+import 'package:image/image.dart' as image_lib;
 import 'package:ml_linalg/linalg.dart';
 
 class SimilarityTransform {
@@ -37,7 +41,9 @@ class SimilarityTransform {
     List<List<double>> dst,
     bool estimateScale,
   ) {
-    final srcMat = Matrix.fromList(src.map((list) => list.map((value) => value.toDouble()).toList()).toList());
+    final srcMat = Matrix.fromList(src
+        .map((list) => list.map((value) => value.toDouble()).toList())
+        .toList(),);
     final dstMat = Matrix.fromList(dst);
     final num = srcMat.rowCount;
     final dim = srcMat.columnCount;
@@ -100,5 +106,90 @@ class SimilarityTransform {
     T = T.setSubMatrix(0, dim, 0, dim, newNewSubT);
 
     return T;
+  }
+
+  Uint8List warpAffine({
+    required Uint8List imageData,
+    required Matrix transformationMatrix,
+    required int width,
+    required int height,
+  }) {
+    final image_lib.Image outputImage =
+        image_lib.Image(width: width, height: height);
+    final image_lib.Image inputImage = image_lib.decodeImage(imageData)!;
+
+    if (width != 112 || height != 112) {
+      throw Exception(
+        'Width and height must be 112, other transformations are not supported yet.',
+      );
+    }
+
+    final A = Matrix.fromList([
+      [transformationMatrix[0][0], transformationMatrix[0][1]],
+      [transformationMatrix[1][0], transformationMatrix[1][1]]
+    ]);
+    final B = Vector.fromList(
+      [transformationMatrix[0][2], transformationMatrix[1][2]],
+    );
+    final aInverse = A.inverse();
+
+    final Stopwatch stopwatch = Stopwatch();
+    stopwatch.start();
+
+    for (int yTrans = 0; yTrans < height; ++yTrans) {
+      for (int xTrans = 0; xTrans < width; ++xTrans) {
+        // Perform inverse affine transformation
+        final X = aInverse * (Vector.fromList([xTrans, yTrans]) - B);
+        final xList = X.asFlattenedList;
+        num xOrigin = xList[0];
+        num yOrigin = xList[1];
+
+        // Clamp to image boundaries
+        xOrigin = xOrigin.clamp(0, inputImage.width - 1);
+        yOrigin = yOrigin.clamp(0, inputImage.height - 1);
+
+        // Bilinear interpolation
+        final int x0 = xOrigin.floor();
+        final int x1 = xOrigin.ceil();
+        final int y0 = yOrigin.floor();
+        final int y1 = yOrigin.ceil();
+
+        // Get the original pixels
+        final pixel1 = inputImage.getPixelSafe(x0, y0);
+        final pixel2 = inputImage.getPixelSafe(x1, y0);
+        final pixel3 = inputImage.getPixelSafe(x0, y1);
+        final pixel4 = inputImage.getPixelSafe(x1, y1);
+
+        // Calculate the weights for each pixel
+        final fx = xOrigin - x0;
+        final fy = yOrigin - y0;
+        final fx1 = 1.0 - fx;
+        final fy1 = 1.0 - fy;
+
+        // Calculate the weighted sum of pixels
+        final int r = (pixel1.r * fx1 * fy1 +
+                pixel2.r * fx * fy1 +
+                pixel3.r * fx1 * fy +
+                pixel4.r * fx * fy)
+            .round();
+        final int g = (pixel1.g * fx1 * fy1 +
+                pixel2.g * fx * fy1 +
+                pixel3.g * fx1 * fy +
+                pixel4.g * fx * fy)
+            .round();
+        final int b = (pixel1.b * fx1 * fy1 +
+                pixel2.b * fx * fy1 +
+                pixel3.b * fx1 * fy +
+                pixel4.b * fx * fy)
+            .round();
+
+        // Set the new pixel
+        outputImage.setPixel(xTrans, yTrans, image_lib.ColorRgb8(r, g, b));
+      }
+    }
+    stopwatch.stop();
+    devtools.log('Warping took ${stopwatch.elapsedMilliseconds} ms');
+
+    return image_lib.encodeJpg(outputImage);
   }
 }
