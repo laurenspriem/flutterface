@@ -1,8 +1,10 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
+import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutterface/services/face_alignment/similarity_transform.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/face_detection_service.dart';
 import 'package:flutterface/utils/face_detection_painter.dart';
@@ -19,10 +21,12 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
-  String? _imagePath;
-  Image? _imageOriginal;
-  Size _imageSize = const Size(0, 0);
-  int _stockImageCounter = 0;
+  Image? imageOriginal;
+  Image? faceAligned;
+  Uint8List? imageOriginalData;
+  Size imageSize = const Size(0, 0);
+  int stockImageCounter = 0;
+  int faceFocusCounter = 0;
   final List<String> _stockImagePaths = [
     'assets/images/stock_images/one_person.jpeg',
     'assets/images/stock_images/one_person2.jpeg',
@@ -31,21 +35,23 @@ class _HomePageState extends State<HomePage> {
     'assets/images/stock_images/group_of_people.jpeg',
   ];
 
-  bool _isAnalyzed = false;
-  bool _isModelLoaded = false;
-  bool _predicting = false;
-  late FaceDetection _faceDetection;
-  List<FaceDetectionAbsolute> _faceDetectionResults = [];
+  bool isAnalyzed = false;
+  bool isModelLoaded = false;
+  bool isPredicting = false;
+  bool isAligned = false;
+  late FaceDetection faceDetection;
+  List<FaceDetectionAbsolute> faceDetectionResults = [];
 
   void _pickImage() async {
     cleanResult();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      final decodedImage = await decodeImageFromList(await image.readAsBytes());
+      imageOriginalData = await image.readAsBytes();
+      final decodedImage = await decodeImageFromList(imageOriginalData!);
       setState(() {
-        _imagePath = image.path;
-        _imageOriginal = Image.file(File(_imagePath!));
-        _imageSize =
+        final imagePath = image.path;
+        imageOriginal = Image.file(File(imagePath));
+        imageSize =
             Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
       });
     } else {
@@ -56,26 +62,27 @@ class _HomePageState extends State<HomePage> {
   void _stockImage() async {
     cleanResult();
     final byteData =
-        await rootBundle.load(_stockImagePaths[_stockImageCounter]);
-    final decodedImage =
-        await decodeImageFromList(byteData.buffer.asUint8List());
+        await rootBundle.load(_stockImagePaths[stockImageCounter]);
+    imageOriginalData = byteData.buffer.asUint8List();
+    final decodedImage = await decodeImageFromList(imageOriginalData!);
     setState(() {
-      _imageOriginal = Image.asset(_stockImagePaths[_stockImageCounter]);
-      _imageSize =
+      imageOriginal = Image.asset(_stockImagePaths[stockImageCounter]);
+      imageSize =
           Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
-      _imagePath = _stockImagePaths[_stockImageCounter];
-      _stockImageCounter = (_stockImageCounter + 1) % _stockImagePaths.length;
+      stockImageCounter = (stockImageCounter + 1) % _stockImagePaths.length;
     });
   }
 
   void cleanResult() {
-    _isAnalyzed = false;
-    _faceDetectionResults = <FaceDetectionAbsolute>[];
+    isAnalyzed = false;
+    faceDetectionResults = <FaceDetectionAbsolute>[];
+    isAligned = false;
+    faceFocusCounter = 0;
     setState(() {});
   }
 
   void detectFaces() async {
-    if (_imagePath == null) {
+    if (imageOriginalData == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select an image first'),
@@ -84,32 +91,104 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
-    assert(_imageOriginal != null);
-    if (_isAnalyzed || _predicting) {
+    if (isAnalyzed || isPredicting) {
       return;
     }
 
     setState(() {
-      _predicting = true;
+      isPredicting = true;
     });
 
     devtools.log('Image is sent to the model for inference');
 
     // 'Image plane data length: ${_imageWidget.planes[0].bytes.length}');
-    if (!_isModelLoaded) {
-      _faceDetection = await FaceDetection.create();
-      _isModelLoaded = true;
+    if (!isModelLoaded) {
+      faceDetection = await FaceDetection.create();
+      isModelLoaded = true;
     }
 
-    _faceDetectionResults = await _faceDetection.predict(_imagePath!);
+    faceDetectionResults = await faceDetection.predict(imageOriginalData!);
 
     devtools.log('Inference completed');
-    devtools.log('Inference results: list $_faceDetectionResults of length '
-        '${_faceDetectionResults.length}');
+    devtools.log('Inference results: list $faceDetectionResults of length '
+        '${faceDetectionResults.length}');
 
     setState(() {
-      _predicting = false;
-      _isAnalyzed = true;
+      isPredicting = false;
+      isAnalyzed = true;
+    });
+  }
+
+  void alignFace() {
+    if (imageOriginalData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an image first'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    if (!isAnalyzed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please detect faces first'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    if (faceDetectionResults[0].score < 0.01) {
+      {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No face detected, nothing to transform/align'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+    }
+    if (faceDetectionResults.length == 1 && isAligned) {
+      {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This is the only face found in the image'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+    }
+
+    final face = faceDetectionResults[faceFocusCounter];
+    final faceLandmarks = face.allKeypoints.sublist(0, 4);
+    final tform = SimilarityTransform();
+    final isNoNanInParam = tform.estimate(faceLandmarks);
+    if (!isNoNanInParam) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Something is going wrong in the transformation estimation'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final transformMatrix = tform.params;
+
+    final warpedFace = tform.warpAffine(
+      imageData: imageOriginalData!,
+      transformationMatrix: transformMatrix,
+      width: 112,
+      height: 112,
+    );    
+
+    setState(() {
+      isAligned = true;
+      faceAligned = Image.memory(warpedFace);
+      faceFocusCounter = (faceFocusCounter + 1) % faceDetectionResults.length;
     });
   }
 
@@ -126,21 +205,25 @@ class _HomePageState extends State<HomePage> {
           children: <Widget>[
             SizedBox(
               height: 400,
-              child: _imageOriginal != null
-                  ? Stack(
-                      children: [
-                        _imageOriginal!,
-                        if (_isAnalyzed)
-                          CustomPaint(
-                            painter: FacePainter(
-                              faceDetections: _faceDetectionResults,
-                              imageSize: _imageSize,
-                              availableSize:
-                                  Size(MediaQuery.of(context).size.width, 400),
-                            ),
-                          ),
-                      ],
-                    )
+              child: imageOriginal != null
+                  ? isAligned
+                      ? faceAligned
+                      : Stack(
+                          children: [
+                            imageOriginal!,
+                            if (isAnalyzed)
+                              CustomPaint(
+                                painter: FacePainter(
+                                  faceDetections: faceDetectionResults,
+                                  imageSize: imageSize,
+                                  availableSize: Size(
+                                    MediaQuery.of(context).size.width,
+                                    400,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        )
                   : const Text('No image selected'),
             ),
             const SizedBox(height: 16),
@@ -179,7 +262,7 @@ class _HomePageState extends State<HomePage> {
             SizedBox(
               width: 150,
               child: TextButton(
-                onPressed: _isAnalyzed ? cleanResult : detectFaces,
+                onPressed: isAnalyzed ? cleanResult : detectFaces,
                 style: TextButton.styleFrom(
                   foregroundColor:
                       Theme.of(context).colorScheme.onPrimaryContainer,
@@ -189,11 +272,29 @@ class _HomePageState extends State<HomePage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: _isAnalyzed
+                child: isAnalyzed
                     ? const Text('Clean result')
                     : const Text('Detect faces'),
               ),
-            )
+            ),
+            isAnalyzed
+                ? SizedBox(
+                    width: 150,
+                    child: TextButton(
+                      onPressed: alignFace,
+                      style: TextButton.styleFrom(
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Align face'),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ],
         ),
       ),

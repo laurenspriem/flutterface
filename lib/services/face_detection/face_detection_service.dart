@@ -1,5 +1,6 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
+import 'dart:typed_data' show Uint8List;
 
 import 'package:flutterface/services/face_detection/anchors.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
@@ -108,8 +109,9 @@ class FaceDetection {
     return (pixelValue / 127.5) - 1;
   }
 
-  Future<List<List<List<num>>>> getPreprocessedImage(
-      image_lib.Image image) async {
+  List<List<List<num>>> getPreprocessedImage(
+    image_lib.Image image,
+  ) {
     devtools.log('Preprocessing is called');
     final faceOptions = config.faceOptions;
 
@@ -157,10 +159,10 @@ class FaceDetection {
   }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter
-  Future<List<FaceDetectionAbsolute>> predict(String imagePath) async {
+  List<FaceDetectionAbsolute> predict(Uint8List imageData) {
     assert(interpreter != null);
 
-    final image = await loadImageImage(imagePath);
+    final image = convertDataToImageImage(imageData);
 
     final faceOptions = config.faceOptions;
     devtools.log('outputShapes: $outputShapes');
@@ -168,7 +170,7 @@ class FaceDetection {
     final stopwatch = Stopwatch()..start();
 
     final inputImageMatrix =
-        await getPreprocessedImage(image); // [inputWidt, inputHeight, 3]
+        getPreprocessedImage(image); // [inputWidt, inputHeight, 3]
     final input = [inputImageMatrix];
 
     final outputFaces = createNestedList(outputShapes[0]);
