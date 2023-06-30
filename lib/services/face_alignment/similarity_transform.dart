@@ -1,4 +1,3 @@
-import 'dart:developer' as devtools show log;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutterface/extensions/ml_linalg_extensions.dart';
@@ -28,6 +27,15 @@ class SimilarityTransform {
     ]);
   }
 
+  /// Function to estimate the parameters of the affine transformation. These parameters are stored in the class variable params.
+  ///
+  /// Runs efficiently in about 1-3 ms after initial warm-up.
+  ///
+  /// It takes the source and destination points as input and returns the
+  /// parameters of the affine transformation as output. The function
+  /// returns false if the parameters cannot be estimated. The function
+  /// estimates the parameters by solving a least-squares problem using
+  /// the Umeyama algorithm.
   bool estimate(List<List<int>> src) {
     params = _umeyama(src, arcface, true);
     // We check for NaN in the transformation matrix params.
@@ -41,9 +49,11 @@ class SimilarityTransform {
     List<List<double>> dst,
     bool estimateScale,
   ) {
-    final srcMat = Matrix.fromList(src
-        .map((list) => list.map((value) => value.toDouble()).toList())
-        .toList(),);
+    final srcMat = Matrix.fromList(
+      src
+          .map((list) => list.map((value) => value.toDouble()).toList())
+          .toList(),
+    );
     final dstMat = Matrix.fromList(dst);
     final num = srcMat.rowCount;
     final dim = srcMat.columnCount;
@@ -108,6 +118,10 @@ class SimilarityTransform {
     return T;
   }
 
+  /// Function to warp an image with an affine transformation using the estimated parameters.
+  /// Returns the warped image in the specified width and height, in Uint8List format.
+  ///
+  /// Runs efficiently in about 3-9 ms after initial warm-up.
   Uint8List warpAffine({
     required Uint8List imageData,
     required Matrix transformationMatrix,
@@ -128,21 +142,30 @@ class SimilarityTransform {
       [transformationMatrix[0][0], transformationMatrix[0][1]],
       [transformationMatrix[1][0], transformationMatrix[1][1]]
     ]);
+    final aInverse = A.inverse();
+    // final aInverseMinus = aInverse * -1;
     final B = Vector.fromList(
       [transformationMatrix[0][2], transformationMatrix[1][2]],
     );
-    final aInverse = A.inverse();
-
-    final Stopwatch stopwatch = Stopwatch();
-    stopwatch.start();
+    final b00 = B[0];
+    final b10 = B[1];
+    final a00Prime = aInverse[0][0];
+    final a01Prime = aInverse[0][1];
+    final a10Prime = aInverse[1][0];
+    final a11Prime = aInverse[1][1];
 
     for (int yTrans = 0; yTrans < height; ++yTrans) {
       for (int xTrans = 0; xTrans < width; ++xTrans) {
-        // Perform inverse affine transformation
-        final X = aInverse * (Vector.fromList([xTrans, yTrans]) - B);
-        final xList = X.asFlattenedList;
-        num xOrigin = xList[0];
-        num yOrigin = xList[1];
+        // Perform inverse affine transformation (original implementation, intuitive but slow)
+        // final X = aInverse * (Vector.fromList([xTrans, yTrans]) - B);
+        // final X = aInverseMinus * (B - [xTrans, yTrans]);
+        // final xList = X.asFlattenedList;
+        // num xOrigin = xList[0];
+        // num yOrigin = xList[1];
+
+        // Perform inverse affine transformation (fast implementation, less intuitive)
+        num xOrigin = (xTrans - b00) * a00Prime + (yTrans - b10) * a01Prime;
+        num yOrigin = (xTrans - b00) * a10Prime + (yTrans - b10) * a11Prime;
 
         // Clamp to image boundaries
         xOrigin = xOrigin.clamp(0, inputImage.width - 1);
@@ -187,9 +210,9 @@ class SimilarityTransform {
         outputImage.setPixel(xTrans, yTrans, image_lib.ColorRgb8(r, g, b));
       }
     }
-    stopwatch.stop();
-    devtools.log('Warping took ${stopwatch.elapsedMilliseconds} ms');
 
-    return image_lib.encodeJpg(outputImage);
+    final Uint8List outputData = image_lib.encodeJpg(outputImage);
+
+    return outputData;
   }
 }
