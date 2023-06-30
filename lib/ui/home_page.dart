@@ -106,8 +106,6 @@ class _HomePageState extends State<HomePage> {
       isPredicting = true;
     });
 
-    devtools.log('Image is sent to the model for inference');
-
     // 'Image plane data length: ${_imageWidget.planes[0].bytes.length}');
     if (!isBlazeFaceLoaded) {
       faceDetection = await FaceDetection.create();
@@ -115,10 +113,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     faceDetectionResults = faceDetection.predict(imageOriginalData!);
-
-    devtools.log('Inference completed');
-    devtools.log('Inference results: list $faceDetectionResults of length '
-        '${faceDetectionResults.length}');
 
     setState(() {
       isPredicting = false;
@@ -220,11 +214,7 @@ class _HomePageState extends State<HomePage> {
       isFaceNetLoaded = true;
     }
 
-    devtools.log('Face is sent to FaceNet for inference');
-
     faceEmbeddingResult = faceEmbedding.predict(faceAlignedData!);
-
-    devtools.log('FaceNet inference completed');
 
     setState(() {
       isPredicting = false;

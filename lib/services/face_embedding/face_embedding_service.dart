@@ -5,6 +5,7 @@ import 'dart:typed_data' show Uint8List;
 
 import 'package:flutterface/services/face_embedding/mobilefacenet_model_config.dart';
 import 'package:flutterface/utils/image.dart';
+import 'package:flutterface/utils/ml_input_output.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
@@ -31,22 +32,8 @@ class FaceEmbedding {
 
   int get getAddress => interpreter!.address;
 
-  static List createNestedList(List<int> shape) {
-    if (shape.length < 2 || shape.length > 3) {
-      throw ArgumentError('Shape must have length 2 or 3');
-    }
-    if (shape.length == 2) {
-      return List.generate(shape[0], (_) => List.filled(shape[1], 0.0));
-    } else {
-      return List.generate(
-        shape[0],
-        (_) => List.generate(shape[1], (_) => List.filled(shape[2], 0.0)),
-      );
-    }
-  }
-
   Future<void> loadModel() async {
-    devtools.log('loadModel is called');
+    devtools.log('MobileFaceNet loadModel is called');
 
     try {
       final interpreterOptions = InterpreterOptions();
@@ -59,7 +46,7 @@ class FaceEmbedding {
       // Use GPU Delegate
       // doesn't work on emulator
       // if (Platform.isAndroid) {
-      //   options.addDelegate(GpuDelegateV2());
+      //   interpreterOptions.addDelegate(GpuDelegateV2());
       // }
 
       // Use Metal Delegate
@@ -76,30 +63,25 @@ class FaceEmbedding {
 
       // Get tensor input shape [1, 112, 112, 3]
       final inputTensors = interpreter!.getInputTensors().first;
-      devtools.log('Input Tensors: $inputTensors');
+      devtools.log('MobileFaceNet Input Tensors: $inputTensors');
       // Get tensour output shape [1, 192]
       final outputTensors = interpreter!.getOutputTensors();
       final outputTensor = outputTensors.first;
-      devtools.log('Output Tensors: $outputTensor');
+      devtools.log('MobileFaceNet Output Tensors: $outputTensor');
 
       for (var tensor in outputTensors) {
         outputShapes.add(tensor.shape);
         outputTypes.add(tensor.type);
       }
-      devtools.log('loadModel is finished');
+      devtools.log('MobileFaceNet loadModel is finished');
     } catch (e) {
-      devtools.log('Error while creating interpreter: $e');
+      devtools.log('MobileFaceNet Error while creating interpreter: $e');
     }
-  }
-
-  static num normalizePixel(num pixelValue) {
-    return (pixelValue / 127.5) - 1;
   }
 
   List<List<List<num>>> getPreprocessedImage(
     image_lib.Image image,
   ) {
-    devtools.log('Preprocessing is called');
     final embeddingOptions = config.faceEmbeddingOptions;
 
     // Resize image for model input (112, 112) (thought most likely it is already resized, so we check first)
@@ -115,32 +97,21 @@ class FaceEmbedding {
     }
 
     // Get image matrix representation [inputWidt, inputHeight, 3]
-    final imageMatrix = List.generate(
-      image.height,
-      (y) => List.generate(
-        image.width,
-        (x) {
-          final pixel = image.getPixel(x, y);
-          return [
-            normalizePixel(pixel.r), // Normalize the image to range [-1, 1]
-            normalizePixel(pixel.g), // Normalize the image to range [-1, 1]
-            normalizePixel(pixel.b), // Normalize the image to range [-1, 1]
-          ];
-        },
-      ),
-    );
-    devtools.log('Preprocessing is finished');
+    final imageMatrix = createInputMatrixFromImage(image, normalize: true);
 
     return imageMatrix;
   }
 
-  // TODO: Make the predict function asynchronous with use of isolate-interpreter
+  // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
   List predict(Uint8List imageData) {
     assert(interpreter != null);
 
+    final dataConversionStopwatch = Stopwatch()..start();
     final image = convertDataToImageImage(imageData);
+    dataConversionStopwatch.stop();
+    devtools.log('MobileFaceNet image data conversion is finished, in ${dataConversionStopwatch.elapsedMilliseconds}ms');
 
-    devtools.log('outputShapes: $outputShapes');
+    devtools.log('MobileFaceNet outputShapes: $outputShapes');
 
     final stopwatch = Stopwatch()..start();
 
@@ -148,19 +119,12 @@ class FaceEmbedding {
         getPreprocessedImage(image); // [inputWidt, inputHeight, 3]
     final input = [inputImageMatrix];
 
-    final output = createNestedList(outputShapes[0]);
-    final outputs = <int, List>{
-      0: output,
-    };
+    final output = createEmptyOutputMatrix(outputShapes[0]);
 
-    devtools.log('Input of shape ${input.shape}');
-    devtools
-        .log('Outputs: of shape ${outputs[0]?.shape} and ${outputs[1]?.shape}');
-
-    devtools.log('Interpreter.run is called');
+    devtools.log('MobileFaceNet interpreter.run is called');
     // Run inference
     interpreter!.run(input, output);
-    devtools.log('Interpreter.run is finished');
+    devtools.log('MobileFaceNet interpreter.run is finished');
 
     // Get output tensors
     final embedding = output[0] as List;
@@ -170,7 +134,8 @@ class FaceEmbedding {
       'MobileFaceNet predict() executed in ${stopwatch.elapsedMilliseconds}ms',
     );
 
-    devtools.log('FaceNet results: embedding $embedding');
+    devtools
+        .log('MobileFaceNet results (only first few numbers): embedding ${embedding.sublist(0, 5)}');
     devtools.log(
       'Mean of embedding: ${embedding.cast<num>().reduce((a, b) => a + b) / embedding.length}',
     );

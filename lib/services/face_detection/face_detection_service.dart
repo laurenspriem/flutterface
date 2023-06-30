@@ -9,6 +9,7 @@ import 'package:flutterface/services/face_detection/filter_extract_detections.da
 import 'package:flutterface/services/face_detection/generate_anchors.dart';
 import 'package:flutterface/services/face_detection/naive_non_max_suppression.dart';
 import 'package:flutterface/utils/image.dart';
+import 'package:flutterface/utils/ml_input_output.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
@@ -39,22 +40,8 @@ class FaceDetection {
   late int originalImageWidth;
   late int originalImageHeight;
 
-  static List createNestedList(List<int> shape) {
-    if (shape.length < 2 || shape.length > 3) {
-      throw ArgumentError('Shape must have length 2 or 3');
-    }
-    if (shape.length == 2) {
-      return List.generate(shape[0], (_) => List.filled(shape[1], 0.0));
-    } else {
-      return List.generate(
-        shape[0],
-        (_) => List.generate(shape[1], (_) => List.filled(shape[2], 0.0)),
-      );
-    }
-  }
-
   Future<void> loadModel() async {
-    devtools.log('loadModel is called');
+    devtools.log('BlazeFace.loadModel is called');
 
     final anchorOption = config.anchorOptions;
 
@@ -62,15 +49,15 @@ class FaceDetection {
       final interpreterOptions = InterpreterOptions();
 
       // Use XNNPACK Delegate
-      if (Platform.isAndroid) {
-        interpreterOptions.addDelegate(XNNPackDelegate());
-      }
+      // if (Platform.isAndroid) {
+      //   interpreterOptions.addDelegate(XNNPackDelegate());
+      // }
 
       // Use GPU Delegate
       // doesn't work on emulator
-      // if (Platform.isAndroid) {
-      //   options.addDelegate(GpuDelegateV2());
-      // }
+      if (Platform.isAndroid) {
+        interpreterOptions.addDelegate(GpuDelegateV2());
+      }
 
       // Use Metal Delegate
       if (Platform.isIOS) {
@@ -89,30 +76,26 @@ class FaceDetection {
 
       // Get tensor input shape [1, 128, 128, 3]
       final inputTensors = interpreter!.getInputTensors().first;
-      devtools.log('Input Tensors: $inputTensors');
+      devtools.log('BlazeFace Input Tensors: $inputTensors');
       // Get tensour output shape [1, 896, 16]
       final outputTensors = interpreter!.getOutputTensors();
       final outputTensor = outputTensors.first;
-      devtools.log('Output Tensors: $outputTensor');
+      devtools.log('BlazeFace Output Tensors: $outputTensor');
 
       for (var tensor in outputTensors) {
         outputShapes.add(tensor.shape);
         outputTypes.add(tensor.type);
       }
-      devtools.log('loadModel is finished');
+      devtools.log('BlazeFace.loadModel is finished');
     } catch (e) {
-      devtools.log('Error while creating interpreter: $e');
+      devtools.log('BlazeFace Error while creating interpreter: $e');
     }
-  }
-
-  static num normalizePixel(num pixelValue) {
-    return (pixelValue / 127.5) - 1;
   }
 
   List<List<List<num>>> getPreprocessedImage(
     image_lib.Image image,
   ) {
-    devtools.log('Preprocessing is called');
+    devtools.log('BlazeFace preprocessing is called');
     final faceOptions = config.faceOptions;
 
     originalImageWidth = image.width;
@@ -126,46 +109,26 @@ class FaceDetection {
       image,
       width: faceOptions.inputWidth,
       height: faceOptions.inputHeight,
-      interpolation: image_lib
-          .Interpolation.linear, // linear interpolation is less accurate than cubic, but faster!
+      interpolation: image_lib.Interpolation
+          .linear, // linear interpolation is less accurate than cubic, but faster!
     );
 
     // Get image matrix representation [inputWidt, inputHeight, 3]
-    final imageMatrix = List.generate(
-      imageInput.height,
-      (y) => List.generate(
-        imageInput.width,
-        (x) {
-          final pixel = imageInput.getPixel(x, y);
-          // return [pixel.r, pixel.g, pixel.b];
-          return [
-            normalizePixel(pixel.r), // Normalize the image to range [-1, 1]
-            normalizePixel(pixel.g), // Normalize the image to range [-1, 1]
-            normalizePixel(pixel.b), // Normalize the image to range [-1, 1]
-          ];
-        },
-      ),
-    );
-    devtools.log('Preprocessing is finished');
+    final imageMatrix = createInputMatrixFromImage(imageInput, normalize: true);
 
-    // Check the content of imageMatrix for anything suspicious!
-    // for (var i = 0; i < imageMatrix.length; i++) {
-    //   for (var j = 0; j < imageMatrix[i].length; j++) {
-    //     devtools.log('Pixel at [$i, $j]: ${imageMatrix[i][j]}');
-    //   }
-    // }
+    devtools.log('BlazeFace preprocessing is finished');
 
     return imageMatrix;
   }
 
-  // TODO: Make the predict function asynchronous with use of isolate-interpreter
+  // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
   List<FaceDetectionAbsolute> predict(Uint8List imageData) {
     assert(interpreter != null);
 
     final image = convertDataToImageImage(imageData);
 
     final faceOptions = config.faceOptions;
-    devtools.log('outputShapes: $outputShapes');
+    devtools.log('BlazeFace outputShapes: $outputShapes');
 
     final stopwatch = Stopwatch()..start();
 
@@ -173,8 +136,8 @@ class FaceDetection {
         getPreprocessedImage(image); // [inputWidt, inputHeight, 3]
     final input = [inputImageMatrix];
 
-    final outputFaces = createNestedList(outputShapes[0]);
-    final outputScores = createNestedList(outputShapes[1]);
+    final outputFaces = createEmptyOutputMatrix(outputShapes[0]);
+    final outputScores = createEmptyOutputMatrix(outputShapes[1]);
     final outputs = <int, List>{
       0: outputFaces,
       1: outputScores,
@@ -184,10 +147,12 @@ class FaceDetection {
     devtools
         .log('Outputs: of shape ${outputs[0]?.shape} and ${outputs[1]?.shape}');
 
-    devtools.log('Interpreter.run is called');
+    devtools.log('BlazeFace interpreter.run is called');
     // Run inference
+    final secondStopwatch = Stopwatch()..start();
     interpreter!.runForMultipleInputs([input], outputs);
-    devtools.log('Interpreter.run is finished');
+    secondStopwatch.stop();
+    devtools.log('BlazeFace interpreter.run is finished, in ${secondStopwatch.elapsedMilliseconds} ms');
 
     // Get output tensors
     final rawBoxes = outputs[0]![0]; // Nested List of shape [896, 16]
@@ -228,7 +193,7 @@ class FaceDetection {
     );
 
     if (relativeDetections.isEmpty) {
-      devtools.log('[log] No face detected');
+      devtools.log('No face detected');
       return [
         FaceDetectionAbsolute.zero(),
       ];
@@ -241,7 +206,8 @@ class FaceDetection {
     );
 
     stopwatch.stop();
-    devtools.log('predict() executed in ${stopwatch.elapsedMilliseconds}ms');
+    devtools.log(
+        'BlazeFace.predict() face detection executed in ${stopwatch.elapsedMilliseconds}ms');
 
     return absoluteDetections;
   }
