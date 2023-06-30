@@ -1,7 +1,6 @@
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutterface/extensions/ml_linalg_extensions.dart';
-import 'package:flutterface/utils/ml_input_output.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:ml_linalg/linalg.dart';
 
