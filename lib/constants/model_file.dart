@@ -9,4 +9,6 @@ mixin ModelFile {
       'assets/models/blazeface_front.tflite';
   static const String faceDetectionBackWeb =
       'assets/models/blazeface_back_ente_web.tflite';
+  static const String faceEmbeddingEnte =
+      'assets/models/mobilefacenet_ente_web.tflite';
 }

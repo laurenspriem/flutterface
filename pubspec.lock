@@ -528,11 +528,12 @@ packages:
   tflite_flutter:
     dependency: "direct main"
     description:
-      name: tflite_flutter
-      sha256: "5356a4aa54096dd3ce0ee840c0c602db0cb9f45ce77c1cfe45ec7a39481068de"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.10.0"
+      path: "."
+      ref: main
+      resolved-ref: "1926d89c354a76a3b02baf8c0357e83eaf0d73d1"
+      url: "https://github.com/tensorflow/flutter-tflite.git"
+    source: git
+    version: "0.10.1"
   typed_data:
     dependency: transitive
     description:
