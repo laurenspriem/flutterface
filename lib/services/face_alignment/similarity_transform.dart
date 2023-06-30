@@ -4,6 +4,10 @@ import 'package:flutterface/extensions/ml_linalg_extensions.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:ml_linalg/linalg.dart';
 
+/// Class to compute the similarity transform between two sets of points.
+/// 
+/// The class estimates the parameters of the similarity transformation via the `estimate` function.
+/// After estimation, the transformation can be applied to an image using the `warpAffine` function.
 class SimilarityTransform {
   var params = Matrix.fromList([
     [1.0, 0.0, 0.0],
