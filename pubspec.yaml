@@ -15,7 +15,10 @@ dependencies:
   cupertino_icons: ^1.0.2
   image: ^4.0.17
   image_picker: ^0.8.7+5
-  tflite_flutter: ^0.10.0
+  tflite_flutter: #^0.10.1
+    git:
+      url: https://github.com/tensorflow/flutter-tflite.git
+      ref: main
   # tflite_flutter_helper: # Use this instead: https://github.com/tensorflow/flutter-tflite/tree/main/example/image_classification_mobilenet
   #   git:
   #     url: https://github.com/pnyompen/tflite_flutter_helper.git
