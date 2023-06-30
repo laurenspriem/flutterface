@@ -3,10 +3,10 @@ import 'dart:io';
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutterface/services/face_detection/anchors.dart';
+import 'package:flutterface/services/face_detection/blazeface_model_config.dart';
 import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/filter_extract_detections.dart';
 import 'package:flutterface/services/face_detection/generate_anchors.dart';
-import 'package:flutterface/services/face_detection/model_config.dart';
 import 'package:flutterface/services/face_detection/naive_non_max_suppression.dart';
 import 'package:flutterface/utils/image.dart';
 import 'package:image/image.dart' as image_lib;
@@ -15,7 +15,7 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 class FaceDetection {
   FaceDetection._({required this.config});
 
-  final ModelConfig config;
+  final BlazeFaceModelConfig config;
 
   static Future<FaceDetection> create() async {
     // In the line below, we can change the model to use
@@ -127,7 +127,7 @@ class FaceDetection {
       width: faceOptions.inputWidth,
       height: faceOptions.inputHeight,
       interpolation: image_lib
-          .Interpolation.cubic, // if this is too slow, change to linear
+          .Interpolation.linear, // linear interpolation is less accurate than cubic, but faster!
     );
 
     // Get image matrix representation [inputWidt, inputHeight, 3]
