@@ -21,7 +21,7 @@ class FaceDetection {
   static Future<FaceDetection> create() async {
     // In the line below, we can change the model to use
     final config =
-        faceDetectionBackWeb; // faceDetectionFront // faceDetectionBackWeb // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense;
+        faceDetectionBackWeb; // faceDetectionFront // faceDetectionBackWeb // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense (faster than web while still accurate)
     final faceDetector = FaceDetection._(config: config);
     await faceDetector.loadModel();
     return faceDetector;
@@ -48,12 +48,12 @@ class FaceDetection {
     try {
       final interpreterOptions = InterpreterOptions();
 
-      // Use XNNPACK Delegate
-      // if (Platform.isAndroid) {
-      //   interpreterOptions.addDelegate(XNNPackDelegate());
-      // }
+      // Use XNNPACK Delegate (CPU)
+      if (Platform.isAndroid) {
+        interpreterOptions.addDelegate(XNNPackDelegate());
+      }
 
-      // Use GPU Delegate
+      // Use GPU Delegate (GPU)
       // doesn't work on emulator
       if (Platform.isAndroid) {
         interpreterOptions.addDelegate(GpuDelegateV2());
