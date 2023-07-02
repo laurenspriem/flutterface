@@ -9,6 +9,7 @@ import 'package:flutterface/services/face_detection/detection.dart';
 import 'package:flutterface/services/face_detection/face_detection_service.dart';
 import 'package:flutterface/services/face_embedding/face_embedding_service.dart';
 import 'package:flutterface/utils/face_detection_painter.dart';
+import 'package:flutterface/utils/snackbar_message.dart';
 import 'package:image_picker/image_picker.dart';
 
 class HomePage extends StatefulWidget {
@@ -85,17 +86,13 @@ class _HomePageState extends State<HomePage> {
     faceAlignedData = null;
     faceFocusCounter = 0;
     isEmbedded = false;
+    faceEmbeddingResult = [];
     setState(() {});
   }
 
   void detectFaces() async {
     if (imageOriginalData == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select an image first'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      showResponseSnackbar(context, 'Please select an image first');
       return;
     }
     if (isAnalyzed || isPredicting) {
@@ -122,44 +119,20 @@ class _HomePageState extends State<HomePage> {
 
   void alignFace() {
     if (imageOriginalData == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select an image first'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      showResponseSnackbar(context, 'Please select an image first');
       return;
     }
     if (!isAnalyzed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please detect faces first'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      showResponseSnackbar(context, 'Please detect faces first');
       return;
     }
     if (faceDetectionResults[0].score < 0.01) {
-      {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No face detected, nothing to transform/align'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        return;
-      }
+      showResponseSnackbar(context, 'No face detected, nothing to align');
+      return;
     }
     if (faceDetectionResults.length == 1 && isAligned) {
-      {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('This is the only face found in the image'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        return;
-      }
+      showResponseSnackbar(context, 'This is the only face found in the image');
+      return;
     }
 
     final face = faceDetectionResults[faceFocusCounter];
@@ -167,12 +140,9 @@ class _HomePageState extends State<HomePage> {
     final tform = SimilarityTransform();
     final isNoNanInParam = tform.estimate(faceLandmarks);
     if (!isNoNanInParam) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Something is going wrong in the transformation estimation'),
-          duration: Duration(seconds: 2),
-        ),
+      showResponseSnackbar(
+        context,
+        'Something is going wrong in the transformation estimation',
       );
       return;
     }
@@ -188,6 +158,8 @@ class _HomePageState extends State<HomePage> {
 
     setState(() {
       isAligned = true;
+      faceEmbeddingResult = [];
+      isEmbedded = false;
       faceAligned = Image.memory(faceAlignedData!);
       faceFocusCounter = (faceFocusCounter + 1) % faceDetectionResults.length;
     });
@@ -195,12 +167,7 @@ class _HomePageState extends State<HomePage> {
 
   void embedFace() async {
     if (isAligned == false) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please align face first'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      showResponseSnackbar(context, 'Please align face first');
       return;
     }
 
