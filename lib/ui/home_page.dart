@@ -28,8 +28,10 @@ class _HomePageState extends State<HomePage> {
   Uint8List? imageOriginalData;
   Uint8List? faceAlignedData;
   Size imageSize = const Size(0, 0);
+  late Size imageDisplaySize;
   int stockImageCounter = 0;
   int faceFocusCounter = 0;
+  int embeddingStartIndex = 0;
   final List<String> _stockImagePaths = [
     'assets/images/stock_images/one_person.jpeg',
     'assets/images/stock_images/one_person2.jpeg',
@@ -86,6 +88,7 @@ class _HomePageState extends State<HomePage> {
     faceAlignedData = null;
     faceFocusCounter = 0;
     isEmbedded = false;
+    embeddingStartIndex = 0;
     faceEmbeddingResult = [];
     setState(() {});
   }
@@ -159,6 +162,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       isAligned = true;
       faceEmbeddingResult = [];
+      embeddingStartIndex = 0;
       isEmbedded = false;
       faceAligned = Image.memory(faceAlignedData!);
       faceFocusCounter = (faceFocusCounter + 1) % faceDetectionResults.length;
@@ -175,7 +179,6 @@ class _HomePageState extends State<HomePage> {
       isPredicting = true;
     });
 
-// 'Image plane data length: ${_imageWidget.planes[0].bytes.length}');
     if (!isFaceNetLoaded) {
       faceEmbedding = await FaceEmbedding.create();
       isFaceNetLoaded = true;
@@ -189,135 +192,167 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  void nextEmbedding() {
+    setState(() {
+      embeddingStartIndex =
+          (embeddingStartIndex + 2) % faceEmbeddingResult.length;
+    });
+  }
+
+  void prevEmbedding() {
+    setState(() {
+      embeddingStartIndex =
+          (embeddingStartIndex - 2) % faceEmbeddingResult.length;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    imageDisplaySize = Size(
+      MediaQuery.of(context).size.width * 0.8,
+      MediaQuery.of(context).size.width * 0.8 * 1.5,
+    );
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: Text(
+          widget.title,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        centerTitle: true,
       ),
       body: Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              SizedBox(
-                height: 400,
-                child: imageOriginal != null
-                    ? isAligned
-                        ? faceAligned
-                        : Stack(
-                            children: [
-                              imageOriginal!,
-                              if (isAnalyzed)
-                                CustomPaint(
-                                  painter: FacePainter(
-                                    faceDetections: faceDetectionResults,
-                                    imageSize: imageSize,
-                                    availableSize: Size(
-                                      MediaQuery.of(context).size.width,
-                                      400,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: <Widget>[
+            Container(
+              height: imageDisplaySize.height,
+              width: imageDisplaySize.width,
+              color: Colors.black,
+              padding: const EdgeInsets.all(8.0),
+              child: Stack(
+                alignment: Alignment.bottomCenter,
+                children: [
+                  // Image container
+                  Center(
+                    child: imageOriginal != null
+                        ? isAligned
+                            ? faceAligned
+                            : Stack(
+                                children: [
+                                  imageOriginal!,
+                                  if (isAnalyzed)
+                                    CustomPaint(
+                                      painter: FacePainter(
+                                        faceDetections: faceDetectionResults,
+                                        imageSize: imageSize,
+                                        availableSize: imageDisplaySize,
+                                      ),
                                     ),
-                                  ),
-                                ),
-                            ],
-                          )
-                    : const Text('No image selected'),
-              ),
-              isEmbedded
-                  ? Text('Face embedding: ${faceEmbeddingResult.sublist(0, 4)}')
-                  : const SizedBox(height: 16),
-              SizedBox(
-                width: 150,
-                child: TextButton(
-                  onPressed: _pickImage,
-                  style: TextButton.styleFrom(
-                    foregroundColor:
-                        Theme.of(context).colorScheme.onPrimaryContainer,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primaryContainer,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('Pick image'),
-                ),
-              ),
-              SizedBox(
-                width: 150,
-                child: TextButton(
-                  onPressed: _stockImage,
-                  style: TextButton.styleFrom(
-                    foregroundColor:
-                        Theme.of(context).colorScheme.onPrimaryContainer,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primaryContainer,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('Stock image'),
-                ),
-              ),
-              SizedBox(
-                width: 150,
-                child: TextButton(
-                  onPressed: isAnalyzed ? cleanResult : detectFaces,
-                  style: TextButton.styleFrom(
-                    foregroundColor:
-                        Theme.of(context).colorScheme.onPrimaryContainer,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primaryContainer,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: isAnalyzed
-                      ? const Text('Clean result')
-                      : const Text('Detect faces'),
-                ),
-              ),
-              isAnalyzed
-                  ? SizedBox(
-                      width: 150,
-                      child: TextButton(
-                        onPressed: alignFace,
-                        style: TextButton.styleFrom(
-                          foregroundColor:
-                              Theme.of(context).colorScheme.onPrimaryContainer,
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primaryContainer,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                                ],
+                              )
+                        : const Text(
+                            'No image selected',
+                            style: TextStyle(color: Colors.white),
                           ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(
+                          Icons.image,
+                          color: Colors.black,
+                          size: 16,
                         ),
-                        child: const Text('Align face'),
+                        label: const Text(
+                          'Gallery',
+                          style: TextStyle(color: Colors.black, fontSize: 10),
+                        ),
+                        onPressed: _pickImage,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(50, 30),
+                          backgroundColor: Colors.grey[200], // Button color
+                          foregroundColor: Colors.black,
+                          elevation: 1,
+                        ),
                       ),
-                    )
-                  : const SizedBox.shrink(),
-              isAligned
-                  ? SizedBox(
-                      width: 150,
-                      child: TextButton(
-                        onPressed: embedFace,
-                        style: TextButton.styleFrom(
-                          foregroundColor:
-                              Theme.of(context).colorScheme.onPrimaryContainer,
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primaryContainer,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                      ElevatedButton.icon(
+                        icon: const Icon(
+                          Icons.collections,
+                          color: Colors.black,
+                          size: 16,
+                        ),
+                        label: const Text(
+                          'Stock',
+                          style: TextStyle(color: Colors.black, fontSize: 10),
+                        ),
+                        onPressed: _stockImage,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(50, 30),
+                          backgroundColor: Colors.grey[200], // Button color
+                          foregroundColor: Colors.black,
+                          elevation: 1, // Elevation (shadow)
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                embeddingStartIndex > 0
+                    ? IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: prevEmbedding,
+                      )
+                    : const SizedBox(width: 48),
+                isEmbedded
+                    ? Column(
+                        children: [
+                          Text(
+                            'Embedding: ${faceEmbeddingResult[embeddingStartIndex]}',
                           ),
-                        ),
-                        child: const Text('Face embedding (first numbers)'),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-              const SizedBox(
-                height: 16,
-              )
-            ],
-          ),
+                          if (embeddingStartIndex + 1 <
+                              faceEmbeddingResult.length)
+                            Text(
+                              '${faceEmbeddingResult[embeddingStartIndex + 1]}',
+                            ),
+                        ],
+                      )
+                    : const SizedBox(height: 48),
+                embeddingStartIndex + 2 < faceEmbeddingResult.length
+                    ? IconButton(
+                        icon: const Icon(Icons.arrow_forward),
+                        onPressed: nextEmbedding,
+                      )
+                    : const SizedBox(width: 48),
+              ],
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.people_alt_outlined),
+              label: isAnalyzed
+                  ? const Text('Clean result')
+                  : const Text('Detect faces'),
+              onPressed: isAnalyzed ? cleanResult : detectFaces,
+            ),
+            isAnalyzed
+                ? ElevatedButton.icon(
+                    icon: const Icon(Icons.face_retouching_natural),
+                    label: const Text('Align faces'),
+                    onPressed: alignFace,
+                  )
+                : const SizedBox.shrink(),
+            isAligned
+                ? ElevatedButton.icon(
+                    icon: const Icon(Icons.numbers_outlined),
+                    label: const Text('Embed face'),
+                    onPressed: embedFace,
+                  )
+                : const SizedBox.shrink(),
+          ],
         ),
       ),
     );
