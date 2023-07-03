@@ -332,7 +332,9 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             ElevatedButton.icon(
-              icon: const Icon(Icons.people_alt_outlined),
+              icon: isAnalyzed
+                  ? const Icon(Icons.person_remove_outlined)
+                  : const Icon(Icons.people_alt_outlined),
               label: isAnalyzed
                   ? const Text('Clean result')
                   : const Text('Detect faces'),
