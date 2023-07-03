@@ -38,16 +38,16 @@ class FaceEmbedding {
     try {
       final interpreterOptions = InterpreterOptions();
 
-      // Use XNNPACK Delegate
+      // Use XNNPACK Delegate (CPU)
       if (Platform.isAndroid) {
         interpreterOptions.addDelegate(XNNPackDelegate());
       }
 
       // Use GPU Delegate
       // doesn't work on emulator
-      // if (Platform.isAndroid) {
-      //   interpreterOptions.addDelegate(GpuDelegateV2());
-      // }
+      if (Platform.isAndroid) {
+        interpreterOptions.addDelegate(GpuDelegateV2());
+      }
 
       // Use Metal Delegate
       if (Platform.isIOS) {
@@ -109,7 +109,8 @@ class FaceEmbedding {
     final dataConversionStopwatch = Stopwatch()..start();
     final image = convertDataToImageImage(imageData);
     dataConversionStopwatch.stop();
-    devtools.log('MobileFaceNet image data conversion is finished, in ${dataConversionStopwatch.elapsedMilliseconds}ms');
+    devtools.log(
+        'MobileFaceNet image data conversion is finished, in ${dataConversionStopwatch.elapsedMilliseconds}ms');
 
     devtools.log('MobileFaceNet outputShapes: $outputShapes');
 
@@ -134,8 +135,8 @@ class FaceEmbedding {
       'MobileFaceNet predict() executed in ${stopwatch.elapsedMilliseconds}ms',
     );
 
-    devtools
-        .log('MobileFaceNet results (only first few numbers): embedding ${embedding.sublist(0, 5)}');
+    devtools.log(
+        'MobileFaceNet results (only first few numbers): embedding ${embedding.sublist(0, 5)}');
     devtools.log(
       'Mean of embedding: ${embedding.cast<num>().reduce((a, b) => a + b) / embedding.length}',
     );
