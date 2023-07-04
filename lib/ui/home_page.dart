@@ -229,7 +229,6 @@ class _HomePageState extends State<HomePage> {
               height: imageDisplaySize.height,
               width: imageDisplaySize.width,
               color: Colors.black,
-              padding: const EdgeInsets.all(8.0),
               child: Stack(
                 alignment: Alignment.bottomCenter,
                 children: [
@@ -256,46 +255,49 @@ class _HomePageState extends State<HomePage> {
                             style: TextStyle(color: Colors.white),
                           ),
                   ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ElevatedButton.icon(
-                        icon: const Icon(
-                          Icons.image,
-                          color: Colors.black,
-                          size: 16,
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        ElevatedButton.icon(
+                          icon: const Icon(
+                            Icons.image,
+                            color: Colors.black,
+                            size: 16,
+                          ),
+                          label: const Text(
+                            'Gallery',
+                            style: TextStyle(color: Colors.black, fontSize: 10),
+                          ),
+                          onPressed: _pickImage,
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(50, 30),
+                            backgroundColor: Colors.grey[200], // Button color
+                            foregroundColor: Colors.black,
+                            elevation: 1,
+                          ),
                         ),
-                        label: const Text(
-                          'Gallery',
-                          style: TextStyle(color: Colors.black, fontSize: 10),
+                        ElevatedButton.icon(
+                          icon: const Icon(
+                            Icons.collections,
+                            color: Colors.black,
+                            size: 16,
+                          ),
+                          label: const Text(
+                            'Stock',
+                            style: TextStyle(color: Colors.black, fontSize: 10),
+                          ),
+                          onPressed: _stockImage,
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(50, 30),
+                            backgroundColor: Colors.grey[200], // Button color
+                            foregroundColor: Colors.black,
+                            elevation: 1, // Elevation (shadow)
+                          ),
                         ),
-                        onPressed: _pickImage,
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(50, 30),
-                          backgroundColor: Colors.grey[200], // Button color
-                          foregroundColor: Colors.black,
-                          elevation: 1,
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        icon: const Icon(
-                          Icons.collections,
-                          color: Colors.black,
-                          size: 16,
-                        ),
-                        label: const Text(
-                          'Stock',
-                          style: TextStyle(color: Colors.black, fontSize: 10),
-                        ),
-                        onPressed: _stockImage,
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(50, 30),
-                          backgroundColor: Colors.grey[200], // Button color
-                          foregroundColor: Colors.black,
-                          elevation: 1, // Elevation (shadow)
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -308,7 +310,7 @@ class _HomePageState extends State<HomePage> {
                         icon: const Icon(Icons.arrow_back),
                         onPressed: prevEmbedding,
                       )
-                    : const SizedBox(width: 48),
+                    : const SizedBox(height: 48),
                 isEmbedded
                     ? Column(
                         children: [
@@ -328,7 +330,7 @@ class _HomePageState extends State<HomePage> {
                         icon: const Icon(Icons.arrow_forward),
                         onPressed: nextEmbedding,
                       )
-                    : const SizedBox(width: 48),
+                    : const SizedBox(height: 48),
               ],
             ),
             ElevatedButton.icon(
