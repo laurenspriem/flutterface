@@ -30,11 +30,11 @@ class FaceDetection {
   final outputShapes = <List<int>>[];
   final outputTypes = <TensorType>[];
 
-  Interpreter? interpreter;
+  late Interpreter interpreter;
 
   List<Object> get props => [];
 
-  int get getAddress => interpreter!.address;
+  int get getAddress => interpreter.address;
 
   late List<Anchor> _anchors;
   late int originalImageWidth;
@@ -51,34 +51,36 @@ class FaceDetection {
       // Use XNNPACK Delegate (CPU)
       if (Platform.isAndroid) {
         interpreterOptions.addDelegate(XNNPackDelegate());
+        interpreterOptions.threads = Platform.numberOfProcessors;
       }
 
       // Use GPU Delegate (GPU)
       // doesn't work on emulator
-      if (Platform.isAndroid) {
-        interpreterOptions.addDelegate(GpuDelegateV2());
-      }
+      // if (Platform.isAndroid) {
+      //   interpreterOptions.addDelegate(GpuDelegateV2());
+      //   interpreterOptions.useNnApiForAndroid = true;
+      // }
 
       // Use Metal Delegate
       if (Platform.isIOS) {
         interpreterOptions.addDelegate(GpuDelegate());
+        interpreterOptions.useMetalDelegateForIOS = true;
       }
 
       // Create anchor boxes for BlazeFace
       _anchors = generateAnchors(anchorOption);
 
       // Load model from assets
-      interpreter = interpreter ??
-          await Interpreter.fromAsset(
-            config.modelPath,
-            options: interpreterOptions,
-          );
+      interpreter = await Interpreter.fromAsset(
+        config.modelPath,
+        options: interpreterOptions,
+      );
 
       // Get tensor input shape [1, 128, 128, 3]
-      final inputTensors = interpreter!.getInputTensors().first;
+      final inputTensors = interpreter.getInputTensors().first;
       devtools.log('BlazeFace Input Tensors: $inputTensors');
       // Get tensour output shape [1, 896, 16]
-      final outputTensors = interpreter!.getOutputTensors();
+      final outputTensors = interpreter.getOutputTensors();
       final outputTensor = outputTensors.first;
       devtools.log('BlazeFace Output Tensors: $outputTensor');
 
@@ -123,8 +125,6 @@ class FaceDetection {
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
   List<FaceDetectionAbsolute> predict(Uint8List imageData) {
-    assert(interpreter != null);
-
     final image = convertDataToImageImage(imageData);
 
     final faceOptions = config.faceOptions;
@@ -150,9 +150,10 @@ class FaceDetection {
     devtools.log('BlazeFace interpreter.run is called');
     // Run inference
     final secondStopwatch = Stopwatch()..start();
-    interpreter!.runForMultipleInputs([input], outputs);
+    interpreter.runForMultipleInputs([input], outputs);
     secondStopwatch.stop();
-    devtools.log('BlazeFace interpreter.run is finished, in ${secondStopwatch.elapsedMilliseconds} ms');
+    devtools.log(
+        'BlazeFace interpreter.run is finished, in ${secondStopwatch.elapsedMilliseconds} ms');
 
     // Get output tensors
     final rawBoxes = outputs[0]![0]; // Nested List of shape [896, 16]
