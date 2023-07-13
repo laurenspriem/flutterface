@@ -1,6 +1,6 @@
 import 'dart:developer' as devtools show log;
 
-import 'package:flutterface/services/face_alignment/similarity_transform.dart';
+import 'package:flutterface/services/face_ml/face_alignment/similarity_transform.dart';
 import 'package:ml_linalg/linalg.dart';
 import 'package:test/test.dart';
 

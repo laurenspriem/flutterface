@@ -4,10 +4,9 @@ import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:flutterface/services/face_alignment/similarity_transform.dart';
-import 'package:flutterface/services/face_detection/detection.dart';
-import 'package:flutterface/services/face_detection/face_detection_service.dart';
-import 'package:flutterface/services/face_embedding/face_embedding_service.dart';
+import 'package:flutterface/services/face_ml/face_detection/detection.dart';
+import 'package:flutterface/services/face_ml/face_ml_exceptions.dart';
+import 'package:flutterface/services/face_ml/face_ml_service.dart';
 import 'package:flutterface/utils/face_detection_painter.dart';
 import 'package:flutterface/utils/snackbar_message.dart';
 import 'package:image_picker/image_picker.dart';
@@ -46,10 +45,8 @@ class _HomePageState extends State<HomePage> {
   bool isPredicting = false;
   bool isAligned = false;
   bool isEmbedded = false;
-  late FaceDetection faceDetection;
-  late FaceEmbedding faceEmbedding;
   List<FaceDetectionAbsolute> faceDetectionResults = [];
-  List faceEmbeddingResult = [];
+  List<double> faceEmbeddingResult = <double>[];
 
   void _pickImage() async {
     cleanResult();
@@ -106,13 +103,8 @@ class _HomePageState extends State<HomePage> {
       isPredicting = true;
     });
 
-    // 'Image plane data length: ${_imageWidget.planes[0].bytes.length}');
-    if (!isBlazeFaceLoaded) {
-      faceDetection = await FaceDetection.create();
-      isBlazeFaceLoaded = true;
-    }
-
-    faceDetectionResults = faceDetection.predict(imageOriginalData!);
+    faceDetectionResults =
+        await FaceMlService.instance.detectFaces(imageOriginalData!);
 
     setState(() {
       isPredicting = false;
@@ -139,25 +131,13 @@ class _HomePageState extends State<HomePage> {
     }
 
     final face = faceDetectionResults[faceFocusCounter];
-    final faceLandmarks = face.allKeypoints.sublist(0, 4);
-    final tform = SimilarityTransform();
-    final isNoNanInParam = tform.estimate(faceLandmarks);
-    if (!isNoNanInParam) {
-      showResponseSnackbar(
-        context,
-        'Something is going wrong in the transformation estimation',
-      );
+    try {
+      faceAlignedData =
+          FaceMlService.instance.alignSingleFace(imageOriginalData!, face);
+    } on CouldNotEstimateSimilarityTransform {
+      devtools.log('Alignment of face failed');
       return;
     }
-
-    final transformMatrix = tform.params;
-
-    faceAlignedData = tform.warpAffine(
-      imageData: imageOriginalData!,
-      transformationMatrix: transformMatrix,
-      width: 112,
-      height: 112,
-    );
 
     setState(() {
       isAligned = true;
@@ -179,12 +159,8 @@ class _HomePageState extends State<HomePage> {
       isPredicting = true;
     });
 
-    if (!isFaceNetLoaded) {
-      faceEmbedding = await FaceEmbedding.create();
-      isFaceNetLoaded = true;
-    }
-
-    faceEmbeddingResult = faceEmbedding.predict(faceAlignedData!);
+    faceEmbeddingResult =
+        await FaceMlService.instance.embedSingleFace(faceAlignedData!);
 
     setState(() {
       isPredicting = false;

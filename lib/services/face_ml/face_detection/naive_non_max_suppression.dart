@@ -1,6 +1,6 @@
 import 'dart:math' as math show max, min;
 
-import 'package:flutterface/services/face_detection/detection.dart';
+import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 
 List<FaceDetectionRelative> naiveNonMaxSuppression({
   required List<FaceDetectionRelative> detections,

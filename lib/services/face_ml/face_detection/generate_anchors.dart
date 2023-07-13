@@ -1,7 +1,7 @@
 import 'dart:developer' as devtools show log;
 import 'dart:math' as math show sqrt;
 
-import 'package:flutterface/services/face_detection/anchors.dart';
+import 'package:flutterface/services/face_ml/face_detection/anchors.dart';
 
 List<Anchor> generateAnchors(AnchorOptions options) {
   final anchors = <Anchor>[];
