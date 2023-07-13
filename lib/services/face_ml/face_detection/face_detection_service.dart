@@ -2,44 +2,49 @@ import 'dart:developer' as devtools show log;
 import 'dart:io';
 import 'dart:typed_data' show Uint8List;
 
-import 'package:flutterface/services/face_detection/anchors.dart';
-import 'package:flutterface/services/face_detection/blazeface_model_config.dart';
-import 'package:flutterface/services/face_detection/detection.dart';
-import 'package:flutterface/services/face_detection/filter_extract_detections.dart';
-import 'package:flutterface/services/face_detection/generate_anchors.dart';
-import 'package:flutterface/services/face_detection/naive_non_max_suppression.dart';
+import 'package:flutterface/services/face_ml/face_detection/anchors.dart';
+import 'package:flutterface/services/face_ml/face_detection/blazeface_model_config.dart';
+import 'package:flutterface/services/face_ml/face_detection/detection.dart';
+import 'package:flutterface/services/face_ml/face_detection/face_detection_exceptions.dart';
+import 'package:flutterface/services/face_ml/face_detection/filter_extract_detections.dart';
+import 'package:flutterface/services/face_ml/face_detection/generate_anchors.dart';
+import 'package:flutterface/services/face_ml/face_detection/naive_non_max_suppression.dart';
 import 'package:flutterface/utils/image.dart';
 import 'package:flutterface/utils/ml_input_output.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 class FaceDetection {
-  FaceDetection._({required this.config});
-
-  final BlazeFaceModelConfig config;
-
-  static Future<FaceDetection> create() async {
-    // In the line below, we can change the model to use
-    final config =
-        faceDetectionBackWeb; // faceDetectionFront // faceDetectionBackWeb // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense (faster than web while still accurate)
-    final faceDetector = FaceDetection._(config: config);
-    await faceDetector.loadModel();
-    return faceDetector;
-  }
+  Interpreter? _interpreter;
+  int get getAddress => _interpreter!.address;
 
   final outputShapes = <List<int>>[];
   final outputTypes = <TensorType>[];
-
-  Interpreter? interpreter;
-
-  List<Object> get props => [];
-
-  int get getAddress => interpreter!.address;
 
   late List<Anchor> _anchors;
   late int originalImageWidth;
   late int originalImageHeight;
 
+  final BlazeFaceModelConfig config;
+  // singleton pattern
+  FaceDetection._({required this.config});
+
+  /// Use this instance to access the FaceDetection service. Make sure to call `init()` before using it.
+  /// e.g. `await FaceDetection.instance.init();`
+  ///
+  /// Then you can use `predict()` to get the bounding boxes of the faces, so `FaceDetection.instance.predict(imageData)`
+  ///
+  /// config options: faceDetectionFront // faceDetectionBackWeb // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense (faster than web while still accurate)
+  static final instance = FaceDetection._(config: faceDetectionBackWeb);
+
+  /// Check if the interpreter is initialized, if not initialize it with `loadModel()`
+  Future<void> init() async {
+    if (_interpreter == null) {
+      await loadModel();
+    }
+  }
+
+  /// Initialize the interpreter by loading the model file.
   Future<void> loadModel() async {
     devtools.log('BlazeFace.loadModel is called');
 
@@ -68,17 +73,17 @@ class FaceDetection {
       _anchors = generateAnchors(anchorOption);
 
       // Load model from assets
-      interpreter = interpreter ??
+      _interpreter = _interpreter ??
           await Interpreter.fromAsset(
             config.modelPath,
             options: interpreterOptions,
           );
 
       // Get tensor input shape [1, 128, 128, 3]
-      final inputTensors = interpreter!.getInputTensors().first;
+      final inputTensors = _interpreter!.getInputTensors().first;
       devtools.log('BlazeFace Input Tensors: $inputTensors');
       // Get tensour output shape [1, 896, 16]
-      final outputTensors = interpreter!.getOutputTensors();
+      final outputTensors = _interpreter!.getOutputTensors();
       final outputTensor = outputTensors.first;
       devtools.log('BlazeFace Output Tensors: $outputTensor');
 
@@ -87,8 +92,10 @@ class FaceDetection {
         outputTypes.add(tensor.type);
       }
       devtools.log('BlazeFace.loadModel is finished');
+    // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       devtools.log('BlazeFace Error while creating interpreter: $e');
+      throw BlazeFaceInterpreterInitializationException();
     }
   }
 
@@ -123,9 +130,9 @@ class FaceDetection {
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
   List<FaceDetectionAbsolute> predict(Uint8List imageData) {
-    assert(interpreter != null);
+    assert(_interpreter != null);
 
-    final image = convertDataToImageImage(imageData);
+    final image = convertUint8ListToImagePackageImage(imageData);
 
     final faceOptions = config.faceOptions;
     devtools.log('BlazeFace outputShapes: $outputShapes');
@@ -150,9 +157,16 @@ class FaceDetection {
     devtools.log('BlazeFace interpreter.run is called');
     // Run inference
     final secondStopwatch = Stopwatch()..start();
-    interpreter!.runForMultipleInputs([input], outputs);
+    try {
+      _interpreter!.runForMultipleInputs([input], outputs);
+    // ignore: avoid_catches_without_on_clauses
+    } catch (e) {
+      devtools.log('BlazeFace Error while running inference: $e');
+      throw BlazeFaceInterpreterRunException();
+    }
     secondStopwatch.stop();
-    devtools.log('BlazeFace interpreter.run is finished, in ${secondStopwatch.elapsedMilliseconds} ms');
+    devtools.log(
+        'BlazeFace interpreter.run is finished, in ${secondStopwatch.elapsedMilliseconds} ms');
 
     // Get output tensors
     final rawBoxes = outputs[0]![0]; // Nested List of shape [896, 16]
@@ -207,7 +221,7 @@ class FaceDetection {
 
     stopwatch.stop();
     devtools.log(
-        'BlazeFace.predict() face detection executed in ${stopwatch.elapsedMilliseconds}ms');
+        'BlazeFace.predict() face detection executed in ${stopwatch.elapsedMilliseconds}ms',);
 
     return absoluteDetections;
   }

@@ -194,21 +194,36 @@ class SimilarityTransform {
         final fy1 = 1.0 - fy;
 
         // Calculate the weighted sum of pixels
-        final int r = (pixel1.r * fx1 * fy1 +
-                pixel2.r * fx * fy1 +
-                pixel3.r * fx1 * fy +
-                pixel4.r * fx * fy)
-            .round();
-        final int g = (pixel1.g * fx1 * fy1 +
-                pixel2.g * fx * fy1 +
-                pixel3.g * fx1 * fy +
-                pixel4.g * fx * fy)
-            .round();
-        final int b = (pixel1.b * fx1 * fy1 +
-                pixel2.b * fx * fy1 +
-                pixel3.b * fx1 * fy +
-                pixel4.b * fx * fy)
-            .round();
+        final int r = SimilarityTransform._bilinearInterpolation(
+          pixel1.r,
+          pixel2.r,
+          pixel3.r,
+          pixel4.r,
+          fx,
+          fy,
+          fx1,
+          fy1,
+        );
+        final int g = SimilarityTransform._bilinearInterpolation(
+          pixel1.g,
+          pixel2.g,
+          pixel3.g,
+          pixel4.g,
+          fx,
+          fy,
+          fx1,
+          fy1,
+        );
+        final int b = SimilarityTransform._bilinearInterpolation(
+          pixel1.b,
+          pixel2.b,
+          pixel3.b,
+          pixel4.b,
+          fx,
+          fy,
+          fx1,
+          fy1,
+        );
 
         // Set the new pixel
         outputImage.setPixel(xTrans, yTrans, image_lib.ColorRgb8(r, g, b));
@@ -218,6 +233,23 @@ class SimilarityTransform {
     final Uint8List outputData = image_lib.encodeJpg(outputImage);
 
     return outputData;
+  }
+
+  static int _bilinearInterpolation(
+    num val1,
+    num val2,
+    num val3,
+    num val4,
+    num fx,
+    num fy,
+    num fx1,
+    num fy1,
+  ) {
+    return (val1 * fx1 * fy1 +
+            val2 * fx * fy1 +
+            val3 * fx1 * fy +
+            val4 * fx * fy)
+        .round();
   }
 
   // TODO: properly test, document and implement this function for MobileFaceNet (currently not used anywhere)
@@ -294,18 +326,36 @@ class SimilarityTransform {
         final fy1 = 1.0 - fy;
 
         // Calculate the weighted sum of pixels
-        final num r = ((pixel1.r * fx1 * fy1 +
-                pixel2.r * fx * fy1 +
-                pixel3.r * fx1 * fy +
-                pixel4.r * fx * fy) / 127.5) - 1.0;
-        final num g = ((pixel1.g * fx1 * fy1 +
-                pixel2.g * fx * fy1 +
-                pixel3.g * fx1 * fy +
-                pixel4.g * fx * fy)) / 127.5 - 1;
-        final num b = ((pixel1.b * fx1 * fy1 +
-                pixel2.b * fx * fy1 +
-                pixel3.b * fx1 * fy +
-                pixel4.b * fx * fy) / 127.5) - 1.0;
+        final int r = SimilarityTransform._bilinearInterpolation(
+          pixel1.r,
+          pixel2.r,
+          pixel3.r,
+          pixel4.r,
+          fx,
+          fy,
+          fx1,
+          fy1,
+        );
+        final int g = SimilarityTransform._bilinearInterpolation(
+          pixel1.g,
+          pixel2.g,
+          pixel3.g,
+          pixel4.g,
+          fx,
+          fy,
+          fx1,
+          fy1,
+        );
+        final int b = SimilarityTransform._bilinearInterpolation(
+          pixel1.b,
+          pixel2.b,
+          pixel3.b,
+          pixel4.b,
+          fx,
+          fy,
+          fx1,
+          fy1,
+        );
 
         // Set the new pixel
         outputMatrix[xTrans][yTrans] = [r, g, b];

@@ -1,6 +1,6 @@
 import 'package:flutterface/constants/model_file.dart';
-import 'package:flutterface/services/face_detection/anchors.dart';
-import 'package:flutterface/services/face_detection/face_detection_options.dart';
+import 'package:flutterface/services/face_ml/face_detection/anchors.dart';
+import 'package:flutterface/services/face_ml/face_detection/face_detection_options.dart';
 
 class BlazeFaceModelConfig {
   final String modelPath;

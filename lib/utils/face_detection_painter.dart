@@ -1,6 +1,6 @@
 import 'dart:math' show min;
 import 'package:flutter/material.dart';
-import 'package:flutterface/services/face_detection/detection.dart';
+import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 
 class FacePainter extends CustomPainter {
   final List<FaceDetectionAbsolute> faceDetections;

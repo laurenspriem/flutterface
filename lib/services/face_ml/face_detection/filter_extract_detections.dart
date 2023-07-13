@@ -1,8 +1,8 @@
 import 'dart:math' as math show exp;
 
-import 'package:flutterface/services/face_detection/anchors.dart';
-import 'package:flutterface/services/face_detection/detection.dart';
-import 'package:flutterface/services/face_detection/face_detection_options.dart';
+import 'package:flutterface/services/face_ml/face_detection/anchors.dart';
+import 'package:flutterface/services/face_ml/face_detection/detection.dart';
+import 'package:flutterface/services/face_ml/face_detection/face_detection_options.dart';
 
 List<FaceDetectionRelative> filterExtractDetections({
   required FaceDetectionOptions options,
