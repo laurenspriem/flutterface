@@ -27,7 +27,7 @@ class FaceDetection {
 
   final BlazeFaceModelConfig config;
   // singleton pattern
-  FaceDetection._({required this.config});
+  FaceDetection._privateConstructor({required this.config});
 
   /// Use this instance to access the FaceDetection service. Make sure to call `init()` before using it.
   /// e.g. `await FaceDetection.instance.init();`
@@ -35,7 +35,7 @@ class FaceDetection {
   /// Then you can use `predict()` to get the bounding boxes of the faces, so `FaceDetection.instance.predict(imageData)`
   ///
   /// config options: faceDetectionFront // faceDetectionBackWeb // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense (faster than web while still accurate)
-  static final instance = FaceDetection._(config: faceDetectionBackWeb);
+  static final instance = FaceDetection._privateConstructor(config: faceDetectionBackWeb);
 
   /// Check if the interpreter is initialized, if not initialize it with `loadModel()`
   Future<void> init() async {

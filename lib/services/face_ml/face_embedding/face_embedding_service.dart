@@ -20,7 +20,7 @@ class FaceEmbedding {
 
   final MobileFaceNetModelConfig config;
   // singleton pattern
-  FaceEmbedding._({required this.config});
+  FaceEmbedding._privateConstructor({required this.config});
 
   /// Use this instance to access the FaceEmbedding service. Make sure to call `init()` before using it.
   /// e.g. `await FaceEmbedding.instance.init();`
@@ -28,7 +28,7 @@ class FaceEmbedding {
   /// Then you can use `predict()` to get the embedding of a face, so `FaceEmbedding.instance.predict(imageData)`
   ///
   /// config options: faceEmbeddingEnte
-  static final instance = FaceEmbedding._(config: faceEmbeddingEnte);
+  static final instance = FaceEmbedding._privateConstructor(config: faceEmbeddingEnte);
 
   /// Check if the interpreter is initialized, if not initialize it with `loadModel()`
   Future<void> init() async {

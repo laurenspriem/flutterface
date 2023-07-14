@@ -10,8 +10,8 @@ import 'package:flutterface/services/face_ml/face_ml_exceptions.dart';
 
 class FaceMlService {
   // singleton pattern
-  FaceMlService._();
-  static final instance = FaceMlService._();
+  FaceMlService._privateConstructor();
+  static final instance = FaceMlService._privateConstructor();
 
   /// Detects faces in the given image data.
   ///
