@@ -3,7 +3,7 @@ import 'dart:math' show Random;
 import 'package:simple_cluster/src/dbscan.dart';
 import 'package:test/test.dart';
 
-// run `dart test test/embedding_brute_search_test.dart ` to test
+// run `dart test test/cluster_test.dart ` to test
 void main() {
   // Test simple_cluster package with DBSCAN
   final clusterOutput = testSimpleCluster(100, 192, 4, 20);
@@ -37,17 +37,18 @@ List<List<int>> testSimpleCluster(
 
   final stopwatchClustering = Stopwatch()..start();
 
-  DBSCAN dbscan = DBSCAN(
+  final DBSCAN dbscan = DBSCAN(
     epsilon: 3,
     minPoints: 2,
   );
+
+  final List<List<int>> clusterOutput = dbscan.run(embeddings);
 
   stopwatchClustering.stop();
   print(
     'Clustering for $sampleSize embeddings ($embeddingLength size) executed in ${stopwatchClustering.elapsedMilliseconds}ms',
   );
 
-  List<List<int>> clusterOutput = dbscan.run(embeddings);
   print("===== 1 =====");
   print("Clusters output");
   print(clusterOutput); //or dbscan.cluster

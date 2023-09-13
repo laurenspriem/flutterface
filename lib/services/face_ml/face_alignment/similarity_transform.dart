@@ -182,7 +182,7 @@ class SimilarityTransform {
         final int y1 = yOrigin.ceil();
 
         // Get the original pixels
-        final pixel1 = inputImage.getPixelSafe(x0, y0);
+        final image_lib.Pixel pixel1 = inputImage.getPixelSafe(x0, y0);
         final pixel2 = inputImage.getPixelSafe(x1, y0);
         final pixel3 = inputImage.getPixelSafe(x0, y1);
         final pixel4 = inputImage.getPixelSafe(x1, y1);
