@@ -28,6 +28,9 @@ dependencies:
   equatable: ^2.0.5
   ml_linalg: ^13.11.31
   simple_cluster: ^0.3.0
+  logging: ^1.2.0
+  synchronized: ^3.1.0
+  flutter_isolate: ^2.0.4
   # vector_math: ^2.1.4
   # matrix2d: ^1.0.4
   

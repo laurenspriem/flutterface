@@ -1,6 +1,7 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
 import 'dart:typed_data' show Uint8List;
+import 'dart:ui' as ui show Image;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -112,7 +113,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void alignFace() {
+  void alignFace() async {
     if (imageOriginalData == null) {
       showResponseSnackbar(context, 'Please select an image first');
       return;
@@ -132,7 +133,7 @@ class _HomePageState extends State<HomePage> {
 
     final face = faceDetectionResults[faceFocusCounter];
     try {
-      faceAlignedData =
+      faceAlignedData = await
           FaceMlService.instance.alignSingleFace(imageOriginalData!, face);
     } on CouldNotEstimateSimilarityTransform {
       devtools.log('Alignment of face failed');

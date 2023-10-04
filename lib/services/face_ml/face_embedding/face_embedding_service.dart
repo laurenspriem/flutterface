@@ -5,9 +5,10 @@ import 'dart:typed_data' show Uint8List;
 
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_exceptions.dart';
 import 'package:flutterface/services/face_ml/face_embedding/mobilefacenet_model_config.dart';
-import 'package:flutterface/utils/image.dart';
+// import 'package:flutterface/utils/image.dart';
+import 'package:flutterface/utils/image_ml_util.dart';
 import 'package:flutterface/utils/ml_input_output.dart';
-import 'package:image/image.dart' as image_lib;
+// import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 /// This class is responsible for running the MobileFaceNet model, and can be accessed through the singleton `FaceEmbedding.instance`.
@@ -86,46 +87,51 @@ class FaceEmbedding {
     }
   }
 
-  List<List<List<num>>> getPreprocessedImage(
-    image_lib.Image image,
-  ) {
-    final embeddingOptions = config.faceEmbeddingOptions;
+  // List<List<List<num>>> getPreprocessedImage(
+  //   image_lib.Image image,
+  // ) {
+  //   final embeddingOptions = config.faceEmbeddingOptions;
 
-    // Resize image for model input (112, 112) (thought most likely it is already resized, so we check first)
-    if (image.width != embeddingOptions.inputWidth ||
-        image.height != embeddingOptions.inputHeight) {
-      image = image_lib.copyResize(
-        image,
-        width: embeddingOptions.inputWidth,
-        height: embeddingOptions.inputHeight,
-        interpolation: image_lib.Interpolation
-            .linear, // can choose `bicubic` if more accuracy is needed. But this is slow, and adds little if bilinear is already used earlier (which is the case)
-      );
-    }
+  //   // Resize image for model input (112, 112) (thought most likely it is already resized, so we check first)
+  //   if (image.width != embeddingOptions.inputWidth ||
+  //       image.height != embeddingOptions.inputHeight) {
+  //     image = image_lib.copyResize(
+  //       image,
+  //       width: embeddingOptions.inputWidth,
+  //       height: embeddingOptions.inputHeight,
+  //       interpolation: image_lib.Interpolation
+  //           .linear, // can choose `bicubic` if more accuracy is needed. But this is slow, and adds little if bilinear is already used earlier (which is the case)
+  //     );
+  //   }
 
-    // Get image matrix representation [inputWidt, inputHeight, 3]
-    final imageMatrix = createInputMatrixFromImage(image, normalize: true);
+  //   // Get image matrix representation [inputWidt, inputHeight, 3]
+  //   final imageMatrix = createInputMatrixFromImage(image, normalize: true);
 
-    return imageMatrix;
-  }
+  //   return imageMatrix;
+  // }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
-  List<double> predict(Uint8List imageData) {
+  Future<List<double>> predict(Uint8List imageData) async {
     assert(_interpreter != null);
 
-    final dataConversionStopwatch = Stopwatch()..start();
-    final image = convertUint8ListToImagePackageImage(imageData);
-    dataConversionStopwatch.stop();
+    final embeddingOptions = config.faceEmbeddingOptions;
+
+    final stopwatchDecoding = Stopwatch()..start();
+    final inputImageMatrix = await ImageConversionIsolate.instance.preprocessImage(
+      imageData,
+      normalize: true,
+      requiredWidth: embeddingOptions.inputWidth,
+      requiredHeight: embeddingOptions.inputHeight,
+    );
+    final input = [inputImageMatrix];
+    stopwatchDecoding.stop();
     devtools.log(
-        'MobileFaceNet image data conversion is finished, in ${dataConversionStopwatch.elapsedMilliseconds}ms');
+      'MobileFaceNet image decoding and preprocessing is finished, in ${stopwatchDecoding.elapsedMilliseconds}ms',
+    );
 
     devtools.log('MobileFaceNet outputShapes: $outputShapes');
 
     final stopwatch = Stopwatch()..start();
-
-    final inputImageMatrix =
-        getPreprocessedImage(image); // [inputWidt, inputHeight, 3]
-    final input = [inputImageMatrix];
 
     final output = createEmptyOutputMatrix(outputShapes[0]);
 

@@ -30,7 +30,7 @@ linter:
     - avoid_empty_else
     - exhaustive_cases
 
-    - avoid_catches_without_on_clauses
+    # - avoid_catches_without_on_clauses
     - only_throw_errors # to prevent errors like this https://stackoverflow.com/questions/72714905/flutter-dart-try-catch-not-working-properly
 
 
@@ -43,6 +43,7 @@ linter:
     - prefer_single_quotes
     - sort_child_properties_last
     - unawaited_futures
+    - discarded_futures
     # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
 
     # Ref https://github.com/flutter/packages/blob/master/packages/flutter_lints/lib/flutter.yaml
@@ -56,3 +57,5 @@ analyzer:
     await_only_futures: warning
     only_throw_errors: error # to prevent errors like this https://stackoverflow.com/questions/72714905/flutter-dart-try-catch-not-working-properly
     avoid_catches_without_on_clauses: info
+    unawaited_futures: info
+    discarded_futures: info

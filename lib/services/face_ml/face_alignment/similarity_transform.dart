@@ -1,6 +1,10 @@
-import 'dart:typed_data' show Uint8List;
+import 'dart:developer' as devtools show log;
+import 'dart:typed_data' show Uint8List, ByteData;
+import 'dart:ui' as ui show Image, ImageByteFormat, Color;
 
+import 'package:flutter/painting.dart' show decodeImageFromList;
 import 'package:flutterface/extensions/ml_linalg_extensions.dart';
+import 'package:flutterface/utils/image_ml_util.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:ml_linalg/linalg.dart';
 
@@ -126,15 +130,19 @@ class SimilarityTransform {
   /// Returns the warped image in the specified width and height, in Uint8List format.
   ///
   /// Runs efficiently in about 3-9 ms after initial warm-up.
-  Uint8List warpAffine({
+  Future<Uint8List> warpAffine({
     required Uint8List imageData,
     required Matrix transformationMatrix,
     required int width,
     required int height,
-  }) {
+  }) async {
     final image_lib.Image outputImage =
         image_lib.Image(width: width, height: height);
-    final image_lib.Image inputImage = image_lib.decodeImage(imageData)!;
+
+    final (image: inputImage, byteDataRgba: imgByteData!) =
+        await ImageConversionIsolate.instance.decode(imageData, includebyteDataRgba: true);
+        
+    final stopwatch = Stopwatch()..start();
 
     if (width != 112 || height != 112) {
       throw Exception(
@@ -144,7 +152,7 @@ class SimilarityTransform {
 
     final A = Matrix.fromList([
       [transformationMatrix[0][0], transformationMatrix[0][1]],
-      [transformationMatrix[1][0], transformationMatrix[1][1]]
+      [transformationMatrix[1][0], transformationMatrix[1][1]],
     ]);
     final aInverse = A.inverse();
     // final aInverseMinus = aInverse * -1;
@@ -182,10 +190,14 @@ class SimilarityTransform {
         final int y1 = yOrigin.ceil();
 
         // Get the original pixels
-        final image_lib.Pixel pixel1 = inputImage.getPixelSafe(x0, y0);
-        final pixel2 = inputImage.getPixelSafe(x1, y0);
-        final pixel3 = inputImage.getPixelSafe(x0, y1);
-        final pixel4 = inputImage.getPixelSafe(x1, y1);
+        final ui.Color pixel1 =
+            _readPixelColor(inputImage, imgByteData, x0, y0);
+        final ui.Color pixel2 =
+            _readPixelColor(inputImage, imgByteData, x1, y0);
+        final ui.Color pixel3 =
+            _readPixelColor(inputImage, imgByteData, x0, y1);
+        final ui.Color pixel4 =
+            _readPixelColor(inputImage, imgByteData, x1, y1);
 
         // Calculate the weights for each pixel
         final fx = xOrigin - x0;
@@ -195,30 +207,30 @@ class SimilarityTransform {
 
         // Calculate the weighted sum of pixels
         final int r = SimilarityTransform._bilinearInterpolation(
-          pixel1.r,
-          pixel2.r,
-          pixel3.r,
-          pixel4.r,
+          pixel1.red,
+          pixel2.red,
+          pixel3.red,
+          pixel4.red,
           fx,
           fy,
           fx1,
           fy1,
         );
         final int g = SimilarityTransform._bilinearInterpolation(
-          pixel1.g,
-          pixel2.g,
-          pixel3.g,
-          pixel4.g,
+          pixel1.green,
+          pixel2.green,
+          pixel3.green,
+          pixel4.green,
           fx,
           fy,
           fx1,
           fy1,
         );
         final int b = SimilarityTransform._bilinearInterpolation(
-          pixel1.b,
-          pixel2.b,
-          pixel3.b,
-          pixel4.b,
+          pixel1.blue,
+          pixel2.blue,
+          pixel3.blue,
+          pixel4.blue,
           fx,
           fy,
           fx1,
@@ -230,9 +242,33 @@ class SimilarityTransform {
       }
     }
 
+    stopwatch.stop();
+    devtools.log(
+      'Face alignment warpAffine() executed in ${stopwatch.elapsedMilliseconds}ms',
+    );
+
     final Uint8List outputData = image_lib.encodeJpg(outputImage);
 
     return outputData;
+  }
+
+  ui.Color _readPixelColor(
+    ui.Image image,
+    ByteData byteData,
+    int x,
+    int y,
+  ) {
+    if (x < 0 || x >= image.width || y < 0 || y >= image.height) {
+      return const ui.Color(0x00000000);
+    }
+    final int byteOffset = 4 * (image.width * y + x);
+    return ui.Color(_rgbaToArgb(byteData.getUint32(byteOffset)));
+  }
+
+  int _rgbaToArgb(int rgbaColor) {
+    final int a = rgbaColor & 0xFF;
+    final int rgb = rgbaColor >> 8;
+    return rgb + (a << 24);
   }
 
   static int _bilinearInterpolation(
@@ -276,7 +312,7 @@ class SimilarityTransform {
 
     final A = Matrix.fromList([
       [transformationMatrix[0][0], transformationMatrix[0][1]],
-      [transformationMatrix[1][0], transformationMatrix[1][1]]
+      [transformationMatrix[1][0], transformationMatrix[1][1]],
     ]);
     final aInverse = A.inverse();
     // final aInverseMinus = aInverse * -1;

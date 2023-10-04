@@ -27,7 +27,7 @@ class FaceMlService {
 
       // Get the bounding boxes of the faces
       final List<FaceDetectionAbsolute> faces =
-          FaceDetection.instance.predict(imageData);
+          await FaceDetection.instance.predict(imageData);
 
       return faces;
     } on BlazeFaceInterpreterInitializationException {
@@ -48,7 +48,7 @@ class FaceMlService {
   /// Returns the aligned face as image data.
   ///
   /// Throws `CouldNotEstimateSimilarityTransform` or `GeneralFaceMlException` if the face alignment fails.
-  Uint8List alignSingleFace(Uint8List imageData, FaceDetectionAbsolute face) {
+  Future<Uint8List> alignSingleFace(Uint8List imageData, FaceDetectionAbsolute face) async {
     try {
     final faceLandmarks = face.allKeypoints.sublist(0, 4);
     final similarityTransform = SimilarityTransform();
@@ -59,7 +59,7 @@ class FaceMlService {
 
     final transformMatrix = similarityTransform.params;
 
-    final Uint8List faceAlignedData = similarityTransform.warpAffine(
+    final Uint8List faceAlignedData = await similarityTransform.warpAffine(
       imageData: imageData,
       transformationMatrix: transformMatrix,
       width: 112,
@@ -82,13 +82,13 @@ class FaceMlService {
   ///
   /// Throws `CouldNotEstimateSimilarityTransform` or `GeneralFaceMlException` if the face alignment fails.
   // TODO: Make this function more efficient so that it only has to do the Image.Image conversion once
-  List<Uint8List> alignFaces(
+  Future<List<Uint8List>> alignFaces(
     Uint8List imageData,
     List<FaceDetectionAbsolute> faces,
-  ) {
+  ) async {
     final alignedFaces = <Uint8List>[];
     for (int i = 0; i < faces.length; ++i) {
-      final alignedFace = alignSingleFace(imageData, faces[i]);
+      final alignedFace = await alignSingleFace(imageData, faces[i]);
       alignedFaces.add(alignedFace);
     }
 
@@ -108,7 +108,7 @@ class FaceMlService {
     await FaceEmbedding.instance.init();
 
     // Get the embedding of the face
-    final List<double> embedding = FaceEmbedding.instance.predict(faceData);
+    final List<double> embedding = await FaceEmbedding.instance.predict(faceData);
 
     return embedding;
     } on MobileFaceNetInterpreterInitializationException {

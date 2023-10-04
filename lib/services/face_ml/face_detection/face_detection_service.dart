@@ -1,7 +1,20 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
-import 'dart:typed_data' show Uint8List;
+import 'dart:typed_data' show Uint8List, ByteData;
+import 'dart:ui' as ui
+    show
+        Image,
+        ImageByteFormat,
+        Color,
+        Canvas,
+        Paint,
+        PictureRecorder,
+        Rect,
+        Offset,
+        FilterQuality;
 
+import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart' show decodeImageFromList;
 import 'package:flutterface/services/face_ml/face_detection/anchors.dart';
 import 'package:flutterface/services/face_ml/face_detection/blazeface_model_config.dart';
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
@@ -9,7 +22,8 @@ import 'package:flutterface/services/face_ml/face_detection/face_detection_excep
 import 'package:flutterface/services/face_ml/face_detection/filter_extract_detections.dart';
 import 'package:flutterface/services/face_ml/face_detection/generate_anchors.dart';
 import 'package:flutterface/services/face_ml/face_detection/naive_non_max_suppression.dart';
-import 'package:flutterface/utils/image.dart';
+import 'package:flutterface/utils/image_ml_util.dart';
+// import 'package:flutterface/utils/image.dart';
 import 'package:flutterface/utils/ml_input_output.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -35,12 +49,14 @@ class FaceDetection {
   /// Then you can use `predict()` to get the bounding boxes of the faces, so `FaceDetection.instance.predict(imageData)`
   ///
   /// config options: faceDetectionFront // faceDetectionBackWeb // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense (faster than web while still accurate)
-  static final instance = FaceDetection._privateConstructor(config: faceDetectionBackWeb);
+  static final instance =
+      FaceDetection._privateConstructor(config: faceDetectionBackWeb);
 
   /// Check if the interpreter is initialized, if not initialize it with `loadModel()`
   Future<void> init() async {
     if (_interpreter == null) {
       await loadModel();
+      await ImageConversionIsolate.instance.init();
     }
   }
 
@@ -92,56 +108,82 @@ class FaceDetection {
         outputTypes.add(tensor.type);
       }
       devtools.log('BlazeFace.loadModel is finished');
-    // ignore: avoid_catches_without_on_clauses
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       devtools.log('BlazeFace Error while creating interpreter: $e');
       throw BlazeFaceInterpreterInitializationException();
     }
   }
 
-  List<List<List<num>>> getPreprocessedImage(
-    image_lib.Image image,
-  ) {
-    devtools.log('BlazeFace preprocessing is called');
-    final faceOptions = config.faceOptions;
+  // Future<List<List<List<num>>>> getPreprocessedImage(
+  //   ui.Image image,
+  // ) async {
+  //   devtools.log('BlazeFace preprocessing is called');
+  //   final faceOptions = config.faceOptions;
 
-    originalImageWidth = image.width;
-    originalImageHeight = image.height;
-    devtools.log(
-      'originalImageWidth: $originalImageWidth, originalImageHeight: $originalImageHeight',
-    );
+  //   originalImageWidth = image.width;
+  //   originalImageHeight = image.height;
+  //   devtools.log(
+  //     'originalImageWidth: $originalImageWidth, originalImageHeight: $originalImageHeight',
+  //   );
 
-    // Resize image for model input
-    final image_lib.Image imageInput = image_lib.copyResize(
-      image,
-      width: faceOptions.inputWidth,
-      height: faceOptions.inputHeight,
-      interpolation: image_lib.Interpolation
-          .linear, // linear interpolation is less accurate than cubic, but faster!
-    );
+  //   // Resize image for model input
+  //   final ui.Image imageInput = await resizeImage(
+  //     image,
+  //     faceOptions.inputWidth,
+  //     faceOptions.inputHeight,
+  //   );
 
-    // Get image matrix representation [inputWidt, inputHeight, 3]
-    final imageMatrix = createInputMatrixFromImage(imageInput, normalize: true);
+  //   // Get image matrix representation [inputWidt, inputHeight, 3]
+  //   final imageMatrix = createInputMatrix(imageInput, normalize: true);
 
-    devtools.log('BlazeFace preprocessing is finished');
+  //   devtools.log('BlazeFace preprocessing is finished');
 
-    return imageMatrix;
+  //   return imageMatrix;
+  // }
+
+  /// Creates an empty matrix with the specified shape.
+  ///
+  /// The `shape` argument must be a list of length 2 or 3, where the first
+  /// element represents the number of rows, the second element represents
+  /// the number of columns, and the optional third element represents the
+  /// number of channels. The function returns a matrix filled with zeros.
+  ///
+  /// Throws an [ArgumentError] if the `shape` argument is invalid.
+  List createEmptyOutputMatrix(List<int> shape) {
+    if (shape.length < 2 || shape.length > 3) {
+      throw ArgumentError('Shape must have length 2 or 3');
+    }
+    if (shape.length == 2) {
+      return List.generate(shape[0], (_) => List.filled(shape[1], 0.0));
+    } else {
+      return List.generate(
+        shape[0],
+        (_) => List.generate(shape[1], (_) => List.filled(shape[2], 0.0)),
+      );
+    }
   }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
-  List<FaceDetectionAbsolute> predict(Uint8List imageData) {
+  Future<List<FaceDetectionAbsolute>> predict(Uint8List imageData) async {
     assert(_interpreter != null);
 
-    final image = convertUint8ListToImagePackageImage(imageData);
-
     final faceOptions = config.faceOptions;
-    devtools.log('BlazeFace outputShapes: $outputShapes');
+
+    final stopwatchDecoding = Stopwatch()..start();
+    final inputImageMatrix = await ImageConversionIsolate.instance.preprocessImage(
+      imageData,
+      normalize: true,
+      requiredWidth: faceOptions.inputWidth,
+      requiredHeight: faceOptions.inputHeight,
+    );
+    final input = [inputImageMatrix];
+    stopwatchDecoding.stop();
+    devtools.log(
+      'BlazeFace image decoding and preprocessing is finished, in ${stopwatchDecoding.elapsedMilliseconds}ms',
+    );
 
     final stopwatch = Stopwatch()..start();
-
-    final inputImageMatrix =
-        getPreprocessedImage(image); // [inputWidt, inputHeight, 3]
-    final input = [inputImageMatrix];
 
     final outputFaces = createEmptyOutputMatrix(outputShapes[0]);
     final outputScores = createEmptyOutputMatrix(outputShapes[1]);
@@ -159,7 +201,7 @@ class FaceDetection {
     final secondStopwatch = Stopwatch()..start();
     try {
       _interpreter!.runForMultipleInputs([input], outputs);
-    // ignore: avoid_catches_without_on_clauses
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       devtools.log('BlazeFace Error while running inference: $e');
       throw BlazeFaceInterpreterRunException();
@@ -221,7 +263,8 @@ class FaceDetection {
 
     stopwatch.stop();
     devtools.log(
-        'BlazeFace.predict() face detection executed in ${stopwatch.elapsedMilliseconds}ms',);
+      'BlazeFace.predict() face detection executed in ${stopwatch.elapsedMilliseconds}ms',
+    );
 
     return absoluteDetections;
   }
