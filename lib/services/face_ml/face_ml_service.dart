@@ -7,6 +7,7 @@ import 'package:flutterface/services/face_ml/face_detection/face_detection_servi
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_exceptions.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_service.dart';
 import 'package:flutterface/services/face_ml/face_ml_exceptions.dart';
+import 'package:flutterface/utils/image_ml_util.dart';
 
 class FaceMlService {
   // singleton pattern
@@ -20,13 +21,13 @@ class FaceMlService {
   /// Returns a list of face detection results.
   ///
   /// Throws `CouldNotInitializeFaceDetector`, `CouldNotRunFaceDetector` or `GeneralFaceMlException` if something goes wrong.
-  Future<List<FaceDetectionAbsolute>> detectFaces(Uint8List imageData) async {
+  Future<List<FaceDetectionRelative>> detectFaces(Uint8List imageData) async {
     try {
       // Get (and initialize if necessary) the face detector singleton instance
       await FaceDetection.instance.init();
 
       // Get the bounding boxes of the faces
-      final List<FaceDetectionAbsolute> faces =
+      final List<FaceDetectionRelative> faces =
           await FaceDetection.instance.predict(imageData);
 
       return faces;
@@ -34,7 +35,7 @@ class FaceMlService {
       throw CouldNotInitializeFaceDetector();
     } on BlazeFaceInterpreterRunException {
       throw CouldNotRunFaceDetector();
-    // ignore: avoid_catches_without_on_clauses
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       throw GeneralFaceMlException('Face detection failed: $e');
     }
@@ -48,28 +49,32 @@ class FaceMlService {
   /// Returns the aligned face as image data.
   ///
   /// Throws `CouldNotEstimateSimilarityTransform` or `GeneralFaceMlException` if the face alignment fails.
-  Future<Uint8List> alignSingleFace(Uint8List imageData, FaceDetectionAbsolute face) async {
+  Future<Uint8List> alignSingleFace(
+      Uint8List imageData, FaceDetectionAbsolute face) async {
     try {
-    final faceLandmarks = face.allKeypoints.sublist(0, 4);
-    final similarityTransform = SimilarityTransform();
-    final isNoNanInParam = similarityTransform.estimate(faceLandmarks);
-    if (!isNoNanInParam) {
-      throw CouldNotEstimateSimilarityTransform();
-    }
+      // final faceLandmarks = face.allKeypoints.sublist(0, 4);
+      // final similarityTransform = SimilarityTransform();
+      // final isNoNanInParam = similarityTransform.estimate(faceLandmarks);
+      // if (!isNoNanInParam) {
+      //   throw CouldNotEstimateSimilarityTransform();
+      // }
 
-    final transformMatrix = similarityTransform.params;
+      // final List<List<double>> transformMatrix = similarityTransform.params;
 
-    final Uint8List faceAlignedData = await similarityTransform.warpAffine(
-      imageData: imageData,
-      transformationMatrix: transformMatrix,
-      width: 112,
-      height: 112,
-    );
+      // final Uint8List faceAlignedData = await similarityTransform.warpAffine(
+      //   imageData: imageData,
+      //   transformationMatrix: transformMatrix,
+      //   width: 112,
+      //   height: 112,
+      // );
 
-    return faceAlignedData;
-    // ignore: avoid_catches_without_on_clauses
-    } catch (e) {
-      throw GeneralFaceMlException('Face alignment failed: $e');
+      final List<Uint8List> faceAlignedData =
+          await ImageMlIsolate.instance.preprocessFaceAlign(imageData, [face]);
+
+      return faceAlignedData[0];
+      // ignore: avoid_catches_without_on_clauses
+    } catch (e, s) {
+      throw GeneralFaceMlException('Face alignment failed: $e \n $s');
     }
   }
 
@@ -102,20 +107,22 @@ class FaceMlService {
   /// Returns the face embedding as a list of doubles.
   ///
   /// Throws `CouldNotInitializeFaceEmbeddor`, `CouldNotRunFaceEmbeddor` or `GeneralFaceMlException` if the face embedding fails.
-  Future<List<double>> embedSingleFace(Uint8List faceData) async {
+  Future<List<double>> embedSingleFace(
+      Uint8List faceData, List<FaceDetectionAbsolute> faces) async {
     try {
-    // Get (and initialize if necessary) the face detector singleton instance
-    await FaceEmbedding.instance.init();
+      // Get (and initialize if necessary) the face detector singleton instance
+      await FaceEmbedding.instance.init();
 
-    // Get the embedding of the face
-    final List<double> embedding = await FaceEmbedding.instance.predict(faceData);
+      // Get the embedding of the face
+      final List<double> embedding =
+          await FaceEmbedding.instance.predict(faceData, faces);
 
-    return embedding;
+      return embedding;
     } on MobileFaceNetInterpreterInitializationException {
       throw CouldNotInitializeFaceEmbeddor();
     } on MobileFaceNetInterpreterRunException {
       throw CouldNotRunFaceEmbeddor();
-    // ignore: avoid_catches_without_on_clauses
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       throw GeneralFaceMlException('Face embedding failed: $e');
     }

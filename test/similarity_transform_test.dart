@@ -15,16 +15,16 @@ void main() {
   final expectedParameters = Matrix.fromList([
     [0.81073804, -0.05217403, -39.88931937],
     [0.05217403, 0.81073804, -46.62302376],
-    [0, 0, 1]
+    [0, 0, 1],
   ]);
 
   final tform = SimilarityTransform();
   final isNoNanInParam = tform.estimate(exampleLandmarks);
-  final parameters = tform.params;
+  final parameters = tform.paramsList;
 
   group('Similarity Transform Test', () {
-    for (var i = 0; i < parameters.rowCount; i++) {
-      for (var j = 0; j < parameters.columnCount; j++) {
+    for (var i = 0; i < parameters.length; i++) {
+      for (var j = 0; j < parameters[0].length; j++) {
         final actual = parameters[i][j];
         final expected = expectedParameters[i][j];
         devtools.log('actual: $actual, expected: $expected');
@@ -41,23 +41,23 @@ void main() {
       expect(isNoNanInParam, isTrue);
     });
 
-    // Let's clean the parameters and test again.
-    tform.cleanParams();
-    final parametersAfterClean = tform.params;
-    test('cleanParams test', () {
-      expect(
-        parametersAfterClean,
-        equals(
-          Matrix.fromList([
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0, 0, 1]
-          ]),
-        ),
-      );
-    });
+    // // Let's clean the parameters and test again.
+    // tform._cleanParams();
+    // final parametersAfterClean = tform.params;
+    // test('cleanParams test', () {
+    //   expect(
+    //     parametersAfterClean,
+    //     equals(
+    //       Matrix.fromList([
+    //         [1.0, 0.0, 0.0],
+    //         [0.0, 1.0, 0.0],
+    //         [0, 0, 1],
+    //       ]),
+    //     ),
+    //   );
+    // });
 
-    // Let's test again after cleaning.
+    // Let's test again
     final secondExampleLandmarks = [
       <int>[107, 113],
       <int>[147, 116],
@@ -70,10 +70,10 @@ void main() {
       [0, 0, 1],
     ]);
     final secondIsNoNanInParam = tform.estimate(secondExampleLandmarks);
-    final secondParameters = tform.params;
+    final secondParameters = tform.paramsList;
 
-    for (var i = 0; i < secondParameters.rowCount; i++) {
-      for (var j = 0; j < secondParameters.columnCount; j++) {
+    for (var i = 0; i < secondParameters.length; i++) {
+      for (var j = 0; j < secondParameters[0].length; j++) {
         final actual = secondParameters[i][j];
         final expected = secondExpectedParameters[i][j];
         devtools.log('actual: $actual, expected: $expected');

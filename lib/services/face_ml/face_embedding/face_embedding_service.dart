@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math show min, max;
 import 'dart:typed_data' show Uint8List;
 
+import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_exceptions.dart';
 import 'package:flutterface/services/face_ml/face_embedding/mobilefacenet_model_config.dart';
 // import 'package:flutterface/utils/image.dart';
@@ -29,7 +30,8 @@ class FaceEmbedding {
   /// Then you can use `predict()` to get the embedding of a face, so `FaceEmbedding.instance.predict(imageData)`
   ///
   /// config options: faceEmbeddingEnte
-  static final instance = FaceEmbedding._privateConstructor(config: faceEmbeddingEnte);
+  static final instance =
+      FaceEmbedding._privateConstructor(config: faceEmbeddingEnte);
 
   /// Check if the interpreter is initialized, if not initialize it with `loadModel()`
   Future<void> init() async {
@@ -111,19 +113,19 @@ class FaceEmbedding {
   // }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
-  Future<List<double>> predict(Uint8List imageData) async {
+  Future<List<double>> predict(
+      Uint8List imageData, List<FaceDetectionAbsolute> faces) async {
     assert(_interpreter != null);
 
     final embeddingOptions = config.faceEmbeddingOptions;
 
     final stopwatchDecoding = Stopwatch()..start();
-    final inputImageMatrix = await ImageConversionIsolate.instance.preprocessImage(
+    final inputImageMatrix =
+        await ImageMlIsolate.instance.preprocessMobileFaceNet(
       imageData,
-      normalize: true,
-      requiredWidth: embeddingOptions.inputWidth,
-      requiredHeight: embeddingOptions.inputHeight,
+      faces,
     );
-    final input = [inputImageMatrix];
+    final input = [inputImageMatrix[0]];
     stopwatchDecoding.stop();
     devtools.log(
       'MobileFaceNet image decoding and preprocessing is finished, in ${stopwatchDecoding.elapsedMilliseconds}ms',
@@ -139,7 +141,7 @@ class FaceEmbedding {
     // Run inference
     try {
       _interpreter!.run(input, output);
-    // ignore: avoid_catches_without_on_clauses
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       devtools.log('MobileFaceNet Error while running inference: $e');
       throw MobileFaceNetInterpreterRunException();

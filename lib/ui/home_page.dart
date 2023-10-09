@@ -1,7 +1,7 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
 import 'dart:typed_data' show Uint8List;
-import 'dart:ui' as ui show Image;
+// import 'dart:ui' as ui show Image;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -31,6 +31,7 @@ class _HomePageState extends State<HomePage> {
   late Size imageDisplaySize;
   int stockImageCounter = 0;
   int faceFocusCounter = 0;
+  int showingFaceCounter = 0;
   int embeddingStartIndex = 0;
   final List<String> _stockImagePaths = [
     'assets/images/stock_images/one_person.jpeg',
@@ -54,10 +55,15 @@ class _HomePageState extends State<HomePage> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       imageOriginalData = await image.readAsBytes();
+      final stopwatchImageDecoding = Stopwatch()..start();
       final decodedImage = await decodeImageFromList(imageOriginalData!);
       setState(() {
         final imagePath = image.path;
+
         imageOriginal = Image.file(File(imagePath));
+        stopwatchImageDecoding.stop();
+        devtools.log(
+            'Image decoding took ${stopwatchImageDecoding.elapsedMilliseconds} ms');
         imageSize =
             Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
       });
@@ -104,8 +110,14 @@ class _HomePageState extends State<HomePage> {
       isPredicting = true;
     });
 
-    faceDetectionResults =
+    final faceDetectionsRelative =
         await FaceMlService.instance.detectFaces(imageOriginalData!);
+
+    faceDetectionResults = relativeToAbsoluteDetections(
+      detections: faceDetectionsRelative,
+      originalWidth: imageSize.width.round(),
+      originalHeight: imageSize.height.round(),
+    );
 
     setState(() {
       isPredicting = false;
@@ -122,7 +134,7 @@ class _HomePageState extends State<HomePage> {
       showResponseSnackbar(context, 'Please detect faces first');
       return;
     }
-    if (faceDetectionResults[0].score < 0.01) {
+    if (faceDetectionResults.isEmpty) {
       showResponseSnackbar(context, 'No face detected, nothing to align');
       return;
     }
@@ -133,10 +145,10 @@ class _HomePageState extends State<HomePage> {
 
     final face = faceDetectionResults[faceFocusCounter];
     try {
-      faceAlignedData = await
-          FaceMlService.instance.alignSingleFace(imageOriginalData!, face);
-    } on CouldNotEstimateSimilarityTransform {
-      devtools.log('Alignment of face failed');
+      faceAlignedData = await FaceMlService.instance
+          .alignSingleFace(imageOriginalData!, face);
+    } catch (e) {
+      devtools.log('Alignment of face failed: $e');
       return;
     }
 
@@ -146,6 +158,7 @@ class _HomePageState extends State<HomePage> {
       embeddingStartIndex = 0;
       isEmbedded = false;
       faceAligned = Image.memory(faceAlignedData!);
+      showingFaceCounter = faceFocusCounter;
       faceFocusCounter = (faceFocusCounter + 1) % faceDetectionResults.length;
     });
   }
@@ -160,8 +173,10 @@ class _HomePageState extends State<HomePage> {
       isPredicting = true;
     });
 
-    faceEmbeddingResult =
-        await FaceMlService.instance.embedSingleFace(faceAlignedData!);
+    faceEmbeddingResult = await FaceMlService.instance.embedSingleFace(
+      faceAlignedData!,
+      [faceDetectionResults[showingFaceCounter]],
+    );
 
     setState(() {
       isPredicting = false;

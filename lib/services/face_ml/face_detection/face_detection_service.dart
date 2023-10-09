@@ -1,20 +1,7 @@
 import 'dart:developer' as devtools show log;
 import 'dart:io';
-import 'dart:typed_data' show Uint8List, ByteData;
-import 'dart:ui' as ui
-    show
-        Image,
-        ImageByteFormat,
-        Color,
-        Canvas,
-        Paint,
-        PictureRecorder,
-        Rect,
-        Offset,
-        FilterQuality;
+import 'dart:typed_data' show Uint8List;
 
-import 'package:flutter/material.dart';
-import 'package:flutter/painting.dart' show decodeImageFromList;
 import 'package:flutterface/services/face_ml/face_detection/anchors.dart';
 import 'package:flutterface/services/face_ml/face_detection/blazeface_model_config.dart';
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
@@ -23,9 +10,6 @@ import 'package:flutterface/services/face_ml/face_detection/filter_extract_detec
 import 'package:flutterface/services/face_ml/face_detection/generate_anchors.dart';
 import 'package:flutterface/services/face_ml/face_detection/naive_non_max_suppression.dart';
 import 'package:flutterface/utils/image_ml_util.dart';
-// import 'package:flutterface/utils/image.dart';
-import 'package:flutterface/utils/ml_input_output.dart';
-import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 class FaceDetection {
@@ -56,7 +40,6 @@ class FaceDetection {
   Future<void> init() async {
     if (_interpreter == null) {
       await loadModel();
-      await ImageConversionIsolate.instance.init();
     }
   }
 
@@ -165,13 +148,14 @@ class FaceDetection {
   }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
-  Future<List<FaceDetectionAbsolute>> predict(Uint8List imageData) async {
+  Future<List<FaceDetectionRelative>> predict(Uint8List imageData) async {
     assert(_interpreter != null);
 
     final faceOptions = config.faceOptions;
 
     final stopwatchDecoding = Stopwatch()..start();
-    final inputImageMatrix = await ImageConversionIsolate.instance.preprocessImage(
+    final List<List<List<num>>> inputImageMatrix =
+        await ImageMlIsolate.instance.preprocessImage(
       imageData,
       normalize: true,
       requiredWidth: faceOptions.inputWidth,
@@ -250,22 +234,14 @@ class FaceDetection {
 
     if (relativeDetections.isEmpty) {
       devtools.log('No face detected');
-      return [
-        FaceDetectionAbsolute.zero(),
-      ];
+      return <FaceDetectionRelative>[];
     }
-
-    final absoluteDetections = relativeToAbsoluteDetections(
-      detections: relativeDetections,
-      originalWidth: originalImageWidth,
-      originalHeight: originalImageHeight,
-    );
 
     stopwatch.stop();
     devtools.log(
       'BlazeFace.predict() face detection executed in ${stopwatch.elapsedMilliseconds}ms',
     );
 
-    return absoluteDetections;
+    return relativeDetections;
   }
 }
