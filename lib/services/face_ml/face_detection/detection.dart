@@ -136,7 +136,7 @@ class FaceDetectionRelative extends Detection {
     List<double> imageBox, // [xMin, yMin, xMax, yMax]
     List<double> paddedBox, // [xMin, yMin, xMax, yMax]
   ) {
-    // Account for padding proportionally
+    // Account for padding
     final double paddingXRatio =
         (imageBox[0] - paddedBox[0]) / (paddedBox[2] - paddedBox[0]);
     final double paddingYRatio =

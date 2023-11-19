@@ -179,9 +179,16 @@ class FaceDetection {
         selected = phase1Face.getNearestDetection(phase2Faces);
       }
 
+      // TODO: there can be cases where the first phase detection is good but the second is not. This would happen on very low quality images. In those cases we should still just use the first detection.
       if (selected != null &&
           selected.score > _faceOptions.minScoreSigmoidThresholdSecondPass) {
         finalDetections.add(selected);
+      } else if (phase1Face.score >
+          _faceOptions.minScoreSigmoidThresholdSecondPass) {
+        finalDetections.add(phase1Face);
+        _logger.info(
+          'No high confidence face detected in second phase, using first phase detection',
+        );
       }
     }
 
