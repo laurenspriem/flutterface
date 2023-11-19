@@ -1,18 +1,43 @@
 import 'dart:typed_data' show Uint8List;
 
-import 'package:flutterface/services/face_ml/face_alignment/similarity_transform.dart';
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 import 'package:flutterface/services/face_ml/face_detection/face_detection_exceptions.dart';
 import 'package:flutterface/services/face_ml/face_detection/face_detection_service.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_exceptions.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_service.dart';
 import 'package:flutterface/services/face_ml/face_ml_exceptions.dart';
-import 'package:flutterface/utils/image_ml_util.dart';
+import 'package:flutterface/utils/image_ml_isolate.dart';
+import 'package:logging/logging.dart';
 
 class FaceMlService {
+  final _logger = Logger('FaceMlService');
+
   // singleton pattern
   FaceMlService._privateConstructor();
   static final instance = FaceMlService._privateConstructor();
+  factory FaceMlService() => instance;
+
+  bool initialized = false;
+
+  Future<void> init() async {
+    _logger.info('init called');
+    try {
+      await FaceDetection.instance.init();
+    } catch (e, s) {
+      _logger.severe('Could not initialize blazeface', e, s);
+    }
+    try {
+      await ImageMlIsolate.instance.init();
+    } catch (e, s) {
+      _logger.severe('Could not initialize image ml isolate', e, s);
+    }
+    try {
+      await FaceEmbedding.instance.init();
+    } catch (e, s) {
+      _logger.severe('Could not initialize mobilefacenet', e, s);
+    }
+    initialized = true;
+  }
 
   /// Detects faces in the given image data.
   ///
@@ -20,15 +45,12 @@ class FaceMlService {
   ///
   /// Returns a list of face detection results.
   ///
-  /// Throws `CouldNotInitializeFaceDetector`, `CouldNotRunFaceDetector` or `GeneralFaceMlException` if something goes wrong.
+  /// Throws [CouldNotInitializeFaceDetector], [CouldNotRunFaceDetector] or [GeneralFaceMlException] if something goes wrong.
   Future<List<FaceDetectionRelative>> detectFaces(Uint8List imageData) async {
     try {
-      // Get (and initialize if necessary) the face detector singleton instance
-      await FaceDetection.instance.init();
-
       // Get the bounding boxes of the faces
       final List<FaceDetectionRelative> faces =
-          await FaceDetection.instance.predict(imageData);
+          await FaceDetection.instance.predictInTwoPhases(imageData);
 
       return faces;
     } on BlazeFaceInterpreterInitializationException {
@@ -37,6 +59,7 @@ class FaceMlService {
       throw CouldNotRunFaceDetector();
       // ignore: avoid_catches_without_on_clauses
     } catch (e) {
+      _logger.severe('Face detection failed: $e');
       throw GeneralFaceMlException('Face detection failed: $e');
     }
   }
@@ -50,7 +73,9 @@ class FaceMlService {
   ///
   /// Throws `CouldNotEstimateSimilarityTransform` or `GeneralFaceMlException` if the face alignment fails.
   Future<Uint8List> alignSingleFace(
-      Uint8List imageData, FaceDetectionAbsolute face) async {
+    Uint8List imageData,
+    FaceDetectionAbsolute face,
+  ) async {
     try {
       // final faceLandmarks = face.allKeypoints.sublist(0, 4);
       // final similarityTransform = SimilarityTransform();
@@ -108,14 +133,16 @@ class FaceMlService {
   ///
   /// Throws `CouldNotInitializeFaceEmbeddor`, `CouldNotRunFaceEmbeddor` or `GeneralFaceMlException` if the face embedding fails.
   Future<List<double>> embedSingleFace(
-      Uint8List faceData, List<FaceDetectionAbsolute> faces) async {
+    Uint8List faceData,
+    FaceDetectionRelative face,
+  ) async {
     try {
       // Get (and initialize if necessary) the face detector singleton instance
       await FaceEmbedding.instance.init();
 
       // Get the embedding of the face
       final List<double> embedding =
-          await FaceEmbedding.instance.predict(faceData, faces);
+          await FaceEmbedding.instance.predict(faceData, face);
 
       return embedding;
     } on MobileFaceNetInterpreterInitializationException {

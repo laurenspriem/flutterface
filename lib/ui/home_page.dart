@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as devtools show log;
 import 'dart:io';
 import 'dart:typed_data' show Uint8List;
@@ -6,7 +7,6 @@ import 'dart:typed_data' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
-import 'package:flutterface/services/face_ml/face_ml_exceptions.dart';
 import 'package:flutterface/services/face_ml/face_ml_service.dart';
 import 'package:flutterface/utils/face_detection_painter.dart';
 import 'package:flutterface/utils/snackbar_message.dart';
@@ -47,8 +47,15 @@ class _HomePageState extends State<HomePage> {
   bool isPredicting = false;
   bool isAligned = false;
   bool isEmbedded = false;
-  List<FaceDetectionAbsolute> faceDetectionResults = [];
+  List<FaceDetectionRelative> faceDetectionResultsRelative = [];
+  List<FaceDetectionAbsolute> faceDetectionResultsAbsolute = [];
   List<double> faceEmbeddingResult = <double>[];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(FaceMlService.instance.init());
+  }
 
   void _pickImage() async {
     cleanResult();
@@ -87,7 +94,8 @@ class _HomePageState extends State<HomePage> {
 
   void cleanResult() {
     isAnalyzed = false;
-    faceDetectionResults = <FaceDetectionAbsolute>[];
+    faceDetectionResultsAbsolute = <FaceDetectionAbsolute>[];
+    faceDetectionResultsRelative = <FaceDetectionRelative>[];
     isAligned = false;
     faceAlignedData = null;
     faceFocusCounter = 0;
@@ -110,13 +118,13 @@ class _HomePageState extends State<HomePage> {
       isPredicting = true;
     });
 
-    final faceDetectionsRelative =
+    faceDetectionResultsRelative =
         await FaceMlService.instance.detectFaces(imageOriginalData!);
 
-    faceDetectionResults = relativeToAbsoluteDetections(
-      detections: faceDetectionsRelative,
-      originalWidth: imageSize.width.round(),
-      originalHeight: imageSize.height.round(),
+    faceDetectionResultsAbsolute = relativeToAbsoluteDetections(
+      relativeDetections: faceDetectionResultsRelative,
+      imageWidth: imageSize.width.round(),
+      imageHeight: imageSize.height.round(),
     );
 
     setState(() {
@@ -134,16 +142,16 @@ class _HomePageState extends State<HomePage> {
       showResponseSnackbar(context, 'Please detect faces first');
       return;
     }
-    if (faceDetectionResults.isEmpty) {
+    if (faceDetectionResultsAbsolute.isEmpty) {
       showResponseSnackbar(context, 'No face detected, nothing to align');
       return;
     }
-    if (faceDetectionResults.length == 1 && isAligned) {
+    if (faceDetectionResultsAbsolute.length == 1 && isAligned) {
       showResponseSnackbar(context, 'This is the only face found in the image');
       return;
     }
 
-    final face = faceDetectionResults[faceFocusCounter];
+    final face = faceDetectionResultsAbsolute[faceFocusCounter];
     try {
       faceAlignedData = await FaceMlService.instance
           .alignSingleFace(imageOriginalData!, face);
@@ -159,7 +167,8 @@ class _HomePageState extends State<HomePage> {
       isEmbedded = false;
       faceAligned = Image.memory(faceAlignedData!);
       showingFaceCounter = faceFocusCounter;
-      faceFocusCounter = (faceFocusCounter + 1) % faceDetectionResults.length;
+      faceFocusCounter =
+          (faceFocusCounter + 1) % faceDetectionResultsAbsolute.length;
     });
   }
 
@@ -175,7 +184,7 @@ class _HomePageState extends State<HomePage> {
 
     faceEmbeddingResult = await FaceMlService.instance.embedSingleFace(
       faceAlignedData!,
-      [faceDetectionResults[showingFaceCounter]],
+      faceDetectionResultsRelative[showingFaceCounter],
     );
 
     setState(() {
@@ -235,7 +244,8 @@ class _HomePageState extends State<HomePage> {
                                   if (isAnalyzed)
                                     CustomPaint(
                                       painter: FacePainter(
-                                        faceDetections: faceDetectionResults,
+                                        faceDetections:
+                                            faceDetectionResultsAbsolute,
                                         imageSize: imageSize,
                                         availableSize: imageDisplaySize,
                                       ),

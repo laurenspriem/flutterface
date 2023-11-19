@@ -1,32 +1,19 @@
 import 'dart:async';
-import 'dart:isolate';
+import 'dart:math' show min, max;
 import 'dart:typed_data' show Uint8List, ByteData;
 import 'dart:ui';
 
-import 'package:flutter/material.dart' show debugPrint;
 import 'package:flutter/painting.dart' as paint show decodeImageFromList;
-import 'package:flutter_isolate/flutter_isolate.dart';
+import 'package:flutterface/models/ml/ml_typedefs.dart';
 import 'package:flutterface/services/face_ml/face_alignment/similarity_transform.dart';
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 
 import 'package:logging/logging.dart';
 import 'package:ml_linalg/linalg.dart';
-import 'package:synchronized/synchronized.dart';
 
-// TODO: remove these typedefs and import them instead
-typedef Num3DInputMatrix = List<List<List<num>>>;
+final _logger = Logger('ImageMlUtil');
 
-typedef Int3DInputMatrix = List<List<List<int>>>;
-
-typedef Double3DInputMatrix = List<List<List<double>>>;
-
-enum ImageOperation {
-  preprocessStandard,
-  preprocessFaceAlign,
-  preprocessMobileFaceNet,
-  generateFaceThumbnail
-}
-
+/// Reads the pixel color at the specified coordinates.
 Color readPixelColor(
   Image image,
   ByteData byteData,
@@ -49,265 +36,142 @@ int _rgbaToArgb(int rgbaColor) {
   return rgb + (a << 24);
 }
 
-/// This class is responsible for all image operations needed for ML models. It runs in a separate isolate to avoid jank.
+/// Creates an empty matrix with the specified shape.
 ///
-/// It can be accessed through the singleton `ImageConversionIsolate.instance`. e.g. `ImageConversionIsolate.instance.convert(imageData)`
+/// The `shape` argument must be a list of length 2 or 3, where the first
+/// element represents the number of rows, the second element represents
+/// the number of columns, and the optional third element represents the
+/// number of channels. The function returns a matrix filled with zeros.
 ///
-/// IMPORTANT: Make sure to dispose of the isolate when you're done with it with `dispose()`, e.g. `ImageConversionIsolate.instance.dispose();`
-class ImageMlIsolate {
-  // static const String debugName = 'ImageMlIsolate';
-
-  final _logger = Logger('ImageMlIsolate');
-
-  Timer? _inactivityTimer;
-  final Duration _inactivityDuration = const Duration(seconds: 30);
-
-  final _initLock = Lock();
-
-  late FlutterIsolate _isolate;
-  late ReceivePort _receivePort = ReceivePort();
-  late SendPort _mainSendPort;
-
-  bool isSpawned = false;
-
-  // singleton pattern
-  ImageMlIsolate._privateConstructor();
-
-  /// Use this instance to access the ImageConversionIsolate service. Make sure to call `init()` before using it.
-  /// e.g. `await ImageConversionIsolate.instance.init();`
-  /// And kill the isolate when you're done with it with `dispose()`, e.g. `ImageConversionIsolate.instance.dispose();`
-  ///
-  /// Then you can use `convert()` to get the image, so `ImageConversionIsolate.instance.convert(imageData, imagePath: imagePath)`
-  static final ImageMlIsolate instance = ImageMlIsolate._privateConstructor();
-  factory ImageMlIsolate() => instance;
-
-  Future<void> init() async {
-    return _initLock.synchronized(() async {
-      if (isSpawned) return;
-
-      _receivePort = ReceivePort();
-
-      try {
-        _isolate = await FlutterIsolate.spawn(
-          _isolateMain,
-          _receivePort.sendPort,
-        );
-        _mainSendPort = await _receivePort.first as SendPort;
-        isSpawned = true;
-
-        _resetInactivityTimer();
-      } catch (e) {
-        _logger.severe('Could not spawn isolate', e);
-        isSpawned = false;
-      }
-    });
+/// Throws an [ArgumentError] if the `shape` argument is invalid.
+List createEmptyOutputMatrix(List<int> shape) {
+  if (shape.length < 2 || shape.length > 3) {
+    throw ArgumentError('Shape must have length 2 or 3');
   }
-
-  Future<void> ensureSpawned() async {
-    if (!isSpawned) {
-      await init();
-    }
-  }
-
-  @pragma('vm:entry-point')
-  static void _isolateMain(SendPort mainSendPort) async {
-    final receivePort = ReceivePort();
-    mainSendPort.send(receivePort.sendPort);
-
-    receivePort.listen((message) async {
-      final functionIndex = message[0] as int;
-      final function = ImageOperation.values[functionIndex];
-      final args = message[1] as Map<String, dynamic>;
-      final sendPort = message[2] as SendPort;
-
-      switch (function) {
-        case ImageOperation.preprocessStandard:
-          final imageData = args['imageData'] as Uint8List;
-          final normalize = args['normalize'] as bool;
-          final requiredWidth = args['requiredWidth'] as int;
-          final requiredHeight = args['requiredHeight'] as int;
-          final qualityIndex = args['quality'] as int;
-          final quality = FilterQuality.values[qualityIndex];
-          final Num3DInputMatrix result = await _preprocessImage(
-            imageData,
-            normalize: normalize,
-            requiredWidth: requiredWidth,
-            requiredHeight: requiredHeight,
-            quality: quality,
-          );
-          sendPort.send(result);
-        case ImageOperation.preprocessFaceAlign:
-          final imageData = args['imageData'] as Uint8List;
-          final faceLandmarks = args['faceLandmarks'] as List<List<List<int>>>;
-          final List<Uint8List> result = await _preprocessFaceAlign(
-            imageData,
-            faceLandmarks,
-          );
-          sendPort.send(List.from(result));
-        case ImageOperation.preprocessMobileFaceNet:
-          final imageData = args['imageData'] as Uint8List;
-          final faceLandmarks = args['faceLandmarks'] as List<List<List<int>>>;
-          final List<Num3DInputMatrix> result = await _preprocessMobileFaceNet(
-            imageData,
-            faceLandmarks,
-          );
-          sendPort.send(result);
-        case ImageOperation.generateFaceThumbnail:
-          final imageData = args['imageData'] as Uint8List;
-          final faceDetection = args['faceDetection'] as FaceDetectionRelative;
-          final Uint8List result =
-              await _generateFaceThumbnail(imageData, faceDetection);
-          sendPort.send(<dynamic>[result]);
-      }
-    });
-  }
-
-  /// The common method to run any operation in the isolate. It sends the [message] to [_isolateMain] and waits for the result.
-  Future<dynamic> _runInIsolate(
-    (ImageOperation, Map<String, dynamic>) message,
-  ) async {
-    await ensureSpawned();
-    _resetInactivityTimer();
-    final completer = Completer<dynamic>();
-    final answerPort = ReceivePort();
-
-    _mainSendPort.send([message.$1.index, message.$2, answerPort.sendPort]);
-
-    answerPort.listen((receivedMessage) {
-      completer.complete(receivedMessage);
-    });
-
-    return completer.future;
-  }
-
-  /// Resets a timer that kills the isolate after a certain amount of inactivity.
-  ///
-  /// Should be called after initialization (e.g. inside `init()`) and after every call to isolate (e.g. inside `_runInIsolate()`)
-  void _resetInactivityTimer() {
-    _inactivityTimer?.cancel();
-    _inactivityTimer = Timer(_inactivityDuration, () {
-      _logger.info(
-        'Isolate has been inactive for $_inactivityDuration. Killing isolate.',
-      );
-      dispose();
-    });
-  }
-
-  /// Disposes the isolate worker.
-  void dispose() {
-    if (!isSpawned) return;
-
-    isSpawned = false;
-    _isolate.kill();
-    _receivePort.close();
-    _inactivityTimer?.cancel();
-  }
-
-  /// Preprocesses [imageData] for standard ML models inside a separate isolate.
-  ///
-  /// Returns a [Num3DInputMatrix] image usable for ML inference.
-  ///
-  /// Uses [_preprocessImage] inside the isolate.
-  Future<Num3DInputMatrix> preprocessImage(
-    Uint8List imageData, {
-    required bool normalize,
-    required int requiredWidth,
-    required int requiredHeight,
-    FilterQuality quality = FilterQuality.medium,
-  }) async {
-    return await _runInIsolate(
-      (
-        ImageOperation.preprocessStandard,
-        {
-          'imageData': imageData,
-          'normalize': normalize,
-          'requiredWidth': requiredWidth,
-          'requiredHeight': requiredHeight,
-          'quality': quality.index,
-        },
-      ),
+  if (shape.length == 2) {
+    return List.generate(shape[0], (_) => List.filled(shape[1], 0.0));
+  } else {
+    return List.generate(
+      shape[0],
+      (_) => List.generate(shape[1], (_) => List.filled(shape[2], 0.0)),
     );
-  }
-
-  /// Preprocesses [imageData] for face alignment inside a separate isolate, to display the aligned faces. Mostly used for debugging.
-  ///
-  /// Returns a list of [Uint8List] images, one for each face, in png format.
-  ///
-  /// Uses [_preprocessFaceAlign] inside the isolate.
-  ///
-  /// WARNING: For preprocessing for MobileFaceNet, use [preprocessMobileFaceNet] instead!
-  Future<List<Uint8List>> preprocessFaceAlign(
-    Uint8List imageData,
-    List<FaceDetectionAbsolute> faces,
-  ) async {
-    final faceLandmarks =
-        faces.map((face) => face.allKeypoints.sublist(0, 4)).toList();
-    return await _runInIsolate(
-      (
-        ImageOperation.preprocessFaceAlign,
-        {
-          'imageData': imageData,
-          'faceLandmarks': faceLandmarks,
-        },
-      ),
-    ).then((value) => value.cast<Uint8List>());
-  }
-
-  /// Preprocesses [imageData] for MobileFaceNet input inside a separate isolate.
-  ///
-  /// Returns a list of [Num3DInputMatrix] images, one for each face.
-  ///
-  /// Uses [_preprocessMobileFaceNet] inside the isolate.
-  Future<List<Num3DInputMatrix>> preprocessMobileFaceNet(
-    Uint8List imageData,
-    List<FaceDetectionAbsolute> faces,
-  ) async {
-    final faceLandmarks =
-        faces.map((face) => face.allKeypoints.sublist(0, 4)).toList();
-    return await _runInIsolate(
-      (
-        ImageOperation.preprocessMobileFaceNet,
-        {
-          'imageData': imageData,
-          'faceLandmarks': faceLandmarks,
-        },
-      ),
-    );
-  }
-
-  /// Generates a face thumbnail from [imageData] and a [faceDetection].
-  ///
-  /// Uses [_generateFaceThumbnail] inside the isolate.
-  Future<Uint8List> generateFaceThumbnail(
-    Uint8List imageData,
-    FaceDetectionRelative faceDetection,
-  ) async {
-    return await _runInIsolate(
-      (
-        ImageOperation.generateFaceThumbnail,
-        {
-          'imageData': imageData,
-          'faceDetection': faceDetection,
-        },
-      ),
-    ).then((value) => value[0] as Uint8List);
   }
 }
 
+/// Creates an input matrix from the specified image, which can be used for inference
+///
+/// Returns a matrix with the shape [image.height, image.width, 3], where the third dimension represents the RGB channels, as [Num3DInputMatrix].
+/// In fact, this is either a [Double3DInputMatrix] or a [Int3DInputMatrix] depending on the `normalize` argument.
+/// If `normalize` is true, the pixel values are normalized doubles in range [-1, 1]. Otherwise, they are integers in range [0, 255].
+///
+/// The `image` argument must be an ui.[Image] object. The function returns a matrix
+/// with the shape `[image.height, image.width, 3]`, where the third dimension
+/// represents the RGB channels.
+///
+/// bool `normalize`: Normalize the image to range [-1, 1]
+Num3DInputMatrix createInputMatrixFromImage(
+  Image image,
+  ByteData byteDataRgba, {
+  bool normalize = true,
+}) {
+  return List.generate(
+    image.height,
+    (y) => List.generate(
+      image.width,
+      (x) {
+        final pixel = readPixelColor(image, byteDataRgba, x, y);
+        return [
+          normalize ? normalizePixel(pixel.red) : pixel.red,
+          normalize ? normalizePixel(pixel.green) : pixel.green,
+          normalize ? normalizePixel(pixel.blue) : pixel.blue,
+        ];
+      },
+    ),
+  );
+}
+
+/// Creates an input matrix from the specified image, which can be used for inference
+///
+/// Returns a matrix with the shape `[3, image.height, image.width]`, where the first dimension represents the RGB channels, as [Num3DInputMatrix].
+/// In fact, this is either a [Double3DInputMatrix] or a [Int3DInputMatrix] depending on the `normalize` argument.
+/// If `normalize` is true, the pixel values are normalized doubles in range [-1, 1]. Otherwise, they are integers in range [0, 255].
+///
+/// The `image` argument must be an ui.[Image] object. The function returns a matrix
+/// with the shape `[3, image.height, image.width]`, where the first dimension
+/// represents the RGB channels.
+///
+/// bool `normalize`: Normalize the image to range [-1, 1]
+Num3DInputMatrix createInputMatrixFromImageChannelsFirst(
+  Image image,
+  ByteData byteDataRgba, {
+  bool normalize = true,
+}) {
+  // Create an empty 3D list.
+  final Num3DInputMatrix imageMatrix = List.generate(
+    3,
+    (i) => List.generate(
+      image.height,
+      (j) => List.filled(image.width, 0),
+    ),
+  );
+
+  // Determine which function to use to get the pixel value.
+  final pixelValue = normalize ? normalizePixel : (num value) => value;
+
+  for (int y = 0; y < image.height; y++) {
+    for (int x = 0; x < image.width; x++) {
+      // Get the pixel at (x, y).
+      final pixel = readPixelColor(image, byteDataRgba, x, y);
+
+      // Assign the color channels to the respective lists.
+      imageMatrix[0][y][x] = pixelValue(pixel.red);
+      imageMatrix[1][y][x] = pixelValue(pixel.green);
+      imageMatrix[2][y][x] = pixelValue(pixel.blue);
+    }
+  }
+  return imageMatrix;
+}
+
+/// Function normalizes the pixel value to be in range [-1, 1].
+///
+/// It assumes that the pixel value is originally in range [0, 255]
+double normalizePixel(num pixelValue) {
+  return (pixelValue / 127.5) - 1;
+}
+
 /// Decodes [Uint8List] image data to an ui.[Image] object.
-Future<Image> _decodeImageFromData(Uint8List imageData) async {
+Future<Image> decodeImageFromData(Uint8List imageData) async {
+  // Decoding using flutter paint. This is the fastest and easiest method.
   final Image image = await paint.decodeImageFromList(imageData);
   return image;
 
+  // // Similar decoding as above, but without using flutter paint. This is not faster than the above.
   // final Codec codec = await instantiateImageCodecFromBuffer(
   //   await ImmutableBuffer.fromUint8List(imageData),
   // );
   // final FrameInfo frameInfo = await codec.getNextFrame();
   // return frameInfo.image;
+
+  // Decoding using the ImageProvider, same as `image_pixels` package. This is not faster than the above.
+  // final Completer<Image> completer = Completer<Image>();
+  // final ImageProvider provider = MemoryImage(imageData);
+  // final ImageStream stream = provider.resolve(const ImageConfiguration());
+  // final ImageStreamListener listener =
+  //     ImageStreamListener((ImageInfo info, bool _) {
+  //   completer.complete(info.image);
+  // });
+  // stream.addListener(listener);
+  // final Image image = await completer.future;
+  // stream.removeListener(listener);
+  // return image;
+
+  // // Decoding using the ImageProvider from material.Image. This is not faster than the above, and also the code below is not finished!
+  // final materialImage = material.Image.memory(imageData);
+  // final ImageProvider uiImage = await materialImage.image;
 }
 
 /// Decodes [Uint8List] RGBA bytes to an ui.[Image] object.
-Future<Image> _decodeImageFromRgbaBytes(
+Future<Image> decodeImageFromRgbaBytes(
   Uint8List rgbaBytes,
   int width,
   int height,
@@ -328,13 +192,13 @@ Future<Image> _decodeImageFromRgbaBytes(
 /// Returns the [ByteData] object of the image, in rawRgba format.
 ///
 /// Throws an exception if the image could not be converted to ByteData.
-Future<ByteData> _getByteData(
+Future<ByteData> getByteDataFromImage(
   Image image, {
   ImageByteFormat format = ImageByteFormat.rawRgba,
 }) async {
   final ByteData? byteDataRgba = await image.toByteData(format: format);
   if (byteDataRgba == null) {
-    debugPrint('Could not convert image to ByteData');
+    _logger.severe('Could not convert image to ByteData');
     throw Exception('Could not convert image to ByteData');
   }
   return byteDataRgba;
@@ -343,18 +207,19 @@ Future<ByteData> _getByteData(
 /// Encodes an [Image] object to a [Uint8List], by default in the png format.
 ///
 /// Note that the result can be used with `Image.memory()` only if the [format] is png.
-Future<Uint8List> _encodeImage(
+Future<Uint8List> encodeImageToUint8List(
   Image image, {
   ImageByteFormat format = ImageByteFormat.png,
 }) async {
-  final ByteData byteDataPng = await _getByteData(image, format: format);
+  final ByteData byteDataPng =
+      await getByteDataFromImage(image, format: format);
   final encodedImage = byteDataPng.buffer.asUint8List();
 
   return encodedImage;
 }
 
 /// Resizes an [Image] object to the specified [width] and [height].
-Future<Image> _resizeImage(
+Future<Image> resizeImage(
   Image image,
   int width,
   int height, {
@@ -390,28 +255,39 @@ Future<Image> _resizeImage(
 }
 
 /// Crops an [Image] object to the specified [width] and [height], starting at the specified [x] and [y] coordinates.
-Future<Image> _cropImage(
+/// Optionally, the cropped image can be resized to comply with a [maxSize] and/or [minSize].
+Future<Image> cropImage(
   Image image, {
   required int x,
   required int y,
   required int width,
   required int height,
+  Size? maxSize,
+  Size? minSize,
   FilterQuality quality = FilterQuality.medium,
 }) async {
-  if (x < 0 ||
-      y < 0 ||
-      (x + width) > image.width ||
-      (y + height) > image.height) {
-    debugPrint('Invalid crop dimensions or coordinates.');
-    throw ArgumentError('Invalid crop dimensions or coordinates.');
+  // Calculate the scale for resizing based on maxSize and minSize
+  double scaleX = 1.0;
+  double scaleY = 1.0;
+  if (maxSize != null) {
+    scaleX = min(maxSize.width / width, 1.0);
+    scaleY = min(maxSize.height / height, 1.0);
   }
+  if (minSize != null) {
+    scaleX = max(minSize.width / width, scaleX);
+    scaleY = max(minSize.height / height, scaleY);
+  }
+
+  // Calculate the final dimensions
+  final targetWidth = (width * scaleX).round();
+  final targetHeight = (height * scaleY).round();
 
   final recorder = PictureRecorder();
   final canvas = Canvas(
     recorder,
     Rect.fromPoints(
       const Offset(0, 0),
-      Offset(width.toDouble(), height.toDouble()),
+      Offset(targetWidth.toDouble(), targetHeight.toDouble()),
     ),
   );
 
@@ -423,40 +299,109 @@ Future<Image> _cropImage(
     ),
     Rect.fromPoints(
       const Offset(0, 0),
-      Offset(width.toDouble(), height.toDouble()),
+      Offset(targetWidth.toDouble(), targetHeight.toDouble()),
     ),
     Paint()..filterQuality = quality,
   );
 
   final picture = recorder.endRecording();
-  return picture.toImage(width, height);
+
+  if (x < 0 ||
+      y < 0 ||
+      (x + width) > image.width ||
+      (y + height) > image.height) {
+    _logger.severe('Invalid crop dimensions or coordinates.');
+    throw ArgumentError('Invalid crop dimensions or coordinates.');
+  }
+  return picture.toImage(targetWidth, targetHeight);
+}
+
+/// Adds padding around an [Image] object.
+Future<Image> addPaddingToImage(
+  Image image, [
+  double padding = 0.5,
+]) async {
+  const Color paddingColor = Color.fromARGB(0, 0, 0, 0);
+  final originalWidth = image.width;
+  final originalHeight = image.height;
+
+  final paddedWidth = (originalWidth + 2 * padding * originalWidth).toInt();
+  final paddedHeight = (originalHeight + 2 * padding * originalHeight).toInt();
+
+  final recorder = PictureRecorder();
+  final canvas = Canvas(
+    recorder,
+    Rect.fromPoints(
+      const Offset(0, 0),
+      Offset(paddedWidth.toDouble(), paddedHeight.toDouble()),
+    ),
+  );
+
+  final paint = Paint();
+  paint.color = paddingColor;
+
+  // Draw the padding
+  canvas.drawRect(
+    Rect.fromPoints(
+      const Offset(0, 0),
+      Offset(paddedWidth.toDouble(), paddedHeight.toDouble()),
+    ),
+    paint,
+  );
+
+  // Draw the original image on top of the padding
+  canvas.drawImageRect(
+    image,
+    Rect.fromPoints(
+      const Offset(0, 0),
+      Offset(image.width.toDouble(), image.height.toDouble()),
+    ),
+    Rect.fromPoints(
+      Offset(padding * originalWidth, padding * originalHeight),
+      Offset(
+        (1 + padding) * originalWidth,
+        (1 + padding) * originalHeight,
+      ),
+    ),
+    Paint(),
+  );
+
+  final picture = recorder.endRecording();
+  return picture.toImage(paddedWidth, paddedHeight);
 }
 
 /// Preprocesses [imageData] for standard ML models
-Future<Num3DInputMatrix> _preprocessImage(
+Future<Num3DInputMatrix> preprocessImageToMatrix(
   Uint8List imageData, {
   required bool normalize,
   required int requiredWidth,
   required int requiredHeight,
   FilterQuality quality = FilterQuality.medium,
 }) async {
-  final Image image = await _decodeImageFromData(imageData);
+  final Image image = await decodeImageFromData(imageData);
+
+  _logger.info(
+    'Face detection preprocessing: image has dimensions ${image.width}x${image.height}',
+  );
 
   if (image.width == requiredWidth && image.height == requiredHeight) {
-    final ByteData imgByteData = await _getByteData(image);
-    return _createInputMatrixFromImage(image, imgByteData,
-        normalize: normalize);
+    final ByteData imgByteData = await getByteDataFromImage(image);
+    return createInputMatrixFromImage(
+      image,
+      imgByteData,
+      normalize: normalize,
+    );
   }
 
-  final Image resizedImage = await _resizeImage(
+  final Image resizedImage = await resizeImage(
     image,
     requiredWidth,
     requiredHeight,
     quality: quality,
   );
 
-  final ByteData imgByteData = await _getByteData(resizedImage);
-  final Num3DInputMatrix imageMatrix = _createInputMatrixFromImage(
+  final ByteData imgByteData = await getByteDataFromImage(resizedImage);
+  final Num3DInputMatrix imageMatrix = createInputMatrixFromImage(
     resizedImage,
     imgByteData,
     normalize: normalize,
@@ -468,16 +413,16 @@ Future<Num3DInputMatrix> _preprocessImage(
 /// Preprocesses [imageData] based on [faceLandmarks] to align the faces in the images.
 ///
 /// Returns a list of [Uint8List] images, one for each face, in png format.
-Future<List<Uint8List>> _preprocessFaceAlign(
+Future<List<Uint8List>> preprocessFaceAlignToUint8List(
   Uint8List imageData,
   List<List<List<int>>> faceLandmarks, {
   int width = 112,
   int height = 112,
 }) async {
   final alignedImages = <Uint8List>[];
-  final Image image = await _decodeImageFromData(imageData);
+  final Image image = await decodeImageFromData(imageData);
   final ByteData imgByteData =
-      await _getByteData(image, format: ImageByteFormat.rawRgba);
+      await getByteDataFromImage(image, format: ImageByteFormat.rawRgba);
 
   for (final faceLandmark in faceLandmarks) {
     final (transformationMatrix, correctlyEstimated) =
@@ -486,7 +431,7 @@ Future<List<Uint8List>> _preprocessFaceAlign(
       alignedImages.add(Uint8List(0));
       continue;
     }
-    final Uint8List alignedImageRGBA = await _warpAffineToUint8List(
+    final Uint8List alignedImageRGBA = await warpAffineToUint8List(
       image,
       imgByteData,
       transformationMatrix,
@@ -494,8 +439,9 @@ Future<List<Uint8List>> _preprocessFaceAlign(
       height: height,
     );
     final Image alignedImage =
-        await _decodeImageFromRgbaBytes(alignedImageRGBA, width, height);
-    final Uint8List alignedImagePng = await _encodeImage(alignedImage);
+        await decodeImageFromRgbaBytes(alignedImageRGBA, width, height);
+    final Uint8List alignedImagePng =
+        await encodeImageToUint8List(alignedImage);
 
     alignedImages.add(alignedImagePng);
   }
@@ -505,24 +451,41 @@ Future<List<Uint8List>> _preprocessFaceAlign(
 /// Preprocesses [imageData] based on [faceLandmarks] to align the faces in the images
 ///
 /// Returns a list of [Num3DInputMatrix] images, one for each face, ready for MobileFaceNet inference
-Future<List<Num3DInputMatrix>> _preprocessMobileFaceNet(
+Future<(List<Double3DInputMatrix>, List<List<List<double>>>)>
+    preprocessToMobileFaceNetInput(
   Uint8List imageData,
-  List<List<List<int>>> faceLandmarks, {
+  List<Map<String, dynamic>> facesJson, {
   int width = 112,
   int height = 112,
 }) async {
-  final alignedImages = <Num3DInputMatrix>[];
-  final Image image = await _decodeImageFromData(imageData);
-  final ByteData imgByteData = await _getByteData(image);
+  final Image image = await decodeImageFromData(imageData);
+  final ByteData imgByteData = await getByteDataFromImage(image);
+
+  final List<FaceDetectionRelative> relativeFaces =
+      facesJson.map((face) => FaceDetectionRelative.fromJson(face)).toList();
+
+  final List<FaceDetectionAbsolute> absoluteFaces =
+      relativeToAbsoluteDetections(
+    relativeDetections: relativeFaces,
+    imageWidth: image.width,
+    imageHeight: image.height,
+  );
+
+  final List<List<List<int>>> faceLandmarks =
+      absoluteFaces.map((face) => face.allKeypoints.sublist(0, 4)).toList();
+
+  final alignedImages = <Double3DInputMatrix>[];
+  final transformationMatrices = <List<List<double>>>[];
 
   for (final faceLandmark in faceLandmarks) {
     final (transformationMatrix, correctlyEstimated) =
         SimilarityTransform.instance.estimate(faceLandmark);
     if (!correctlyEstimated) {
       alignedImages.add([]);
+      transformationMatrices.add([]);
       continue;
     }
-    final Num3DInputMatrix alignedImage = await _warpAffineToMatrix(
+    final Double3DInputMatrix alignedImage = await warpAffineToMatrix(
       image,
       imgByteData,
       transformationMatrix,
@@ -531,14 +494,15 @@ Future<List<Num3DInputMatrix>> _preprocessMobileFaceNet(
       normalize: true,
     );
     alignedImages.add(alignedImage);
+    transformationMatrices.add(transformationMatrix);
   }
-  return alignedImages;
+  return (alignedImages, transformationMatrices);
 }
 
 /// Function to warp an image [imageData] with an affine transformation using the estimated [transformationMatrix].
 ///
 /// Returns the warped image in the specified width and height, in [Uint8List] RGBA format.
-Future<Uint8List> _warpAffineToUint8List(
+Future<Uint8List> warpAffineToUint8List(
   Image inputImage,
   ByteData imgByteDataRgba,
   List<List<double>> transformationMatrix, {
@@ -605,7 +569,7 @@ Future<Uint8List> _warpAffineToUint8List(
       final fy1 = 1.0 - fy;
 
       // Calculate the weighted sum of pixels
-      final int r = _bilinearInterpolation(
+      final int r = bilinearInterpolation(
         pixel1.red,
         pixel2.red,
         pixel3.red,
@@ -615,7 +579,7 @@ Future<Uint8List> _warpAffineToUint8List(
         fx1,
         fy1,
       );
-      final int g = _bilinearInterpolation(
+      final int g = bilinearInterpolation(
         pixel1.green,
         pixel2.green,
         pixel3.green,
@@ -625,7 +589,7 @@ Future<Uint8List> _warpAffineToUint8List(
         fx1,
         fy1,
       );
-      final int b = _bilinearInterpolation(
+      final int b = bilinearInterpolation(
         pixel1.blue,
         pixel2.blue,
         pixel3.blue,
@@ -650,7 +614,7 @@ Future<Uint8List> _warpAffineToUint8List(
 /// Function to warp an image [imageData] with an affine transformation using the estimated [transformationMatrix].
 ///
 /// Returns a [Num3DInputMatrix], potentially normalized (RGB) and ready to be used as input for a ML model.
-Future<Num3DInputMatrix> _warpAffineToMatrix(
+Future<Double3DInputMatrix> warpAffineToMatrix(
   Image inputImage,
   ByteData imgByteDataRgba,
   List<List<double>> transformationMatrix, {
@@ -658,15 +622,15 @@ Future<Num3DInputMatrix> _warpAffineToMatrix(
   required int height,
   bool normalize = true,
 }) async {
-  final List<List<List<num>>> outputMatrix = List.generate(
+  final List<List<List<double>>> outputMatrix = List.generate(
     height,
     (y) => List.generate(
       width,
       (_) => List.filled(3, 0.0),
     ),
   );
-  final num Function(num) pixelValue =
-      normalize ? _normalizePixel : (num value) => value;
+  final double Function(num) pixelValue =
+      normalize ? normalizePixel : (num value) => value.toDouble();
 
   if (width != 112 || height != 112) {
     throw Exception(
@@ -726,7 +690,7 @@ Future<Num3DInputMatrix> _warpAffineToMatrix(
       final fy1 = 1.0 - fy;
 
       // Calculate the weighted sum of pixels
-      final int r = _bilinearInterpolation(
+      final int r = bilinearInterpolation(
         pixel1.red,
         pixel2.red,
         pixel3.red,
@@ -736,7 +700,7 @@ Future<Num3DInputMatrix> _warpAffineToMatrix(
         fx1,
         fy1,
       );
-      final int g = _bilinearInterpolation(
+      final int g = bilinearInterpolation(
         pixel1.green,
         pixel2.green,
         pixel3.green,
@@ -746,7 +710,7 @@ Future<Num3DInputMatrix> _warpAffineToMatrix(
         fx1,
         fy1,
       );
-      final int b = _bilinearInterpolation(
+      final int b = bilinearInterpolation(
         pixel1.blue,
         pixel2.blue,
         pixel3.blue,
@@ -772,13 +736,13 @@ Future<Num3DInputMatrix> _warpAffineToMatrix(
 /// Generates a face thumbnail from [imageData] and a [faceDetection].
 ///
 /// Returns a [Uint8List] image, in png format.
-Future<Uint8List> _generateFaceThumbnail(
+Future<Uint8List> generateFaceThumbnailFromData(
   Uint8List imageData,
   FaceDetectionRelative faceDetection,
 ) async {
-  final Image image = await _decodeImageFromData(imageData);
+  final Image image = await decodeImageFromData(imageData);
 
-  final Image faceThumbnail = await _cropImage(
+  final Image faceThumbnail = await cropImage(
     image,
     x: (faceDetection.xMinBox * image.width).round() - 20,
     y: (faceDetection.yMinBox * image.height).round() - 30,
@@ -786,91 +750,45 @@ Future<Uint8List> _generateFaceThumbnail(
     height: (faceDetection.height * image.height).round() + 60,
   );
 
-  return await _encodeImage(faceThumbnail, format: ImageByteFormat.png);
-}
-
-/// Creates an input matrix from the specified image, which can be used for inference
-///
-/// Returns a matrix with the shape [image.height, image.width, 3], where the third dimension represents the RGB channels, as [Num3DInputMatrix].
-/// In fact, this is either a [Double3DInputMatrix] or a [Int3DInputMatrix] depending on the `normalize` argument.
-/// If `normalize` is true, the pixel values are normalized doubles in range [-1, 1]. Otherwise, they are integers in range [0, 255].
-///
-/// The `image` argument must be an [Image] object. The function returns a matrix
-/// with the shape `[image.height, image.width, 3]`, where the third dimension
-/// represents the RGB channels.
-///
-/// bool `normalize`: Normalize the image to range [-1, 1]
-Num3DInputMatrix _createInputMatrixFromImage(
-  Image image,
-  ByteData byteDataRgba, {
-  bool normalize = true,
-}) {
-  return List.generate(
-    image.height,
-    (y) => List.generate(
-      image.width,
-      (x) {
-        final pixel = readPixelColor(image, byteDataRgba, x, y);
-        return [
-          normalize ? _normalizePixel(pixel.red) : pixel.red,
-          normalize ? _normalizePixel(pixel.green) : pixel.green,
-          normalize ? _normalizePixel(pixel.blue) : pixel.blue,
-        ];
-      },
-    ),
+  return await encodeImageToUint8List(
+    faceThumbnail,
+    format: ImageByteFormat.png,
   );
 }
 
-/// Creates an input matrix from the specified image, which can be used for inference
+/// Generates cropped and padded image data from [imageData] and a [faceBox].
 ///
-/// Returns a matrix with the shape `[3, image.height, image.width]`, where the first dimension represents the RGB channels, as [Num3DInputMatrix].
-/// In fact, this is either a [Double3DInputMatrix] or a [Int3DInputMatrix] depending on the `normalize` argument.
-/// If `normalize` is true, the pixel values are normalized doubles in range [-1, 1]. Otherwise, they are integers in range [0, 255].
+/// The steps are:
+/// 1. Crop the image to the face bounding box
+/// 2. Resize this cropped image to a square that is half the BlazeFace input size
+/// 3. Pad the image to the BlazeFace input size
 ///
-/// The `image` argument must be an [Image] object. The function returns a matrix
-/// with the shape `[3, image.height, image.width]`, where the first dimension
-/// represents the RGB channels.
-///
-/// bool `normalize`: Normalize the image to range [-1, 1]
-Num3DInputMatrix _createInputMatrixFromImageChannelsFirst(
-  Image image,
-  ByteData byteDataRgba, {
-  bool normalize = true,
-}) {
-  // Create an empty 3D list.
-  final Num3DInputMatrix imageMatrix = List.generate(
-    3,
-    (i) => List.generate(
-      image.height,
-      (j) => List.filled(image.width, 0),
-    ),
+/// Note that [faceBox] is a list of the following values: [xMinBox, yMinBox, xMaxBox, yMaxBox].
+Future<Uint8List> cropAndPadFaceData(
+  Uint8List imageData,
+  List<double> faceBox,
+) async {
+  final Image image = await decodeImageFromData(imageData);
+
+  final Image faceCrop = await cropImage(
+    image,
+    x: (faceBox[0] * image.width).round(),
+    y: (faceBox[1] * image.height).round(),
+    width: ((faceBox[2] - faceBox[0]) * image.width).round(),
+    height: ((faceBox[3] - faceBox[1]) * image.height).round(),
+    maxSize: const Size(128, 128),
+    minSize: const Size(128, 128),
   );
 
-  // Determine which function to use to get the pixel value.
-  final pixelValue = normalize ? _normalizePixel : (num value) => value;
+  final Image facePadded = await addPaddingToImage(
+    faceCrop,
+    0.5,
+  );
 
-  for (int y = 0; y < image.height; y++) {
-    for (int x = 0; x < image.width; x++) {
-      // Get the pixel at (x, y).
-      final pixel = readPixelColor(image, byteDataRgba, x, y);
-
-      // Assign the color channels to the respective lists.
-      imageMatrix[0][y][x] = pixelValue(pixel.red);
-      imageMatrix[1][y][x] = pixelValue(pixel.green);
-      imageMatrix[2][y][x] = pixelValue(pixel.blue);
-    }
-  }
-  return imageMatrix;
+  return await encodeImageToUint8List(facePadded);
 }
 
-/// Function normalizes the pixel value to be in range [-1, 1].
-///
-/// It assumes that the pixel value is originally in range [0, 255]
-double _normalizePixel(num pixelValue) {
-  return (pixelValue / 127.5) - 1;
-}
-
-int _bilinearInterpolation(
+int bilinearInterpolation(
   num val1,
   num val2,
   num val3,

@@ -1,4 +1,4 @@
-import 'package:flutterface/constants/model_file.dart';
+import 'package:flutterface/models/model_file.dart';
 
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_options.dart';
 

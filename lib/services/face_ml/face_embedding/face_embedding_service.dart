@@ -5,22 +5,28 @@ import 'dart:typed_data' show Uint8List;
 
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_exceptions.dart';
+import 'package:flutterface/services/face_ml/face_embedding/face_embedding_options.dart';
 import 'package:flutterface/services/face_ml/face_embedding/mobilefacenet_model_config.dart';
+import 'package:flutterface/utils/image_ml_isolate.dart';
 // import 'package:flutterface/utils/image.dart';
 import 'package:flutterface/utils/image_ml_util.dart';
-import 'package:flutterface/utils/ml_input_output.dart';
+import 'package:logging/logging.dart';
 // import 'package:image/image.dart' as image_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 /// This class is responsible for running the MobileFaceNet model, and can be accessed through the singleton `FaceEmbedding.instance`.
 class FaceEmbedding {
   Interpreter? _interpreter;
+  IsolateInterpreter? _isolateInterpreter;
   int get getAddress => _interpreter!.address;
 
   final outputShapes = <List<int>>[];
   final outputTypes = <TensorType>[];
 
+  final _logger = Logger('FaceEmbeddingService');
+
   final MobileFaceNetModelConfig config;
+  late final FaceEmbeddingOptions embeddingOptions = config.faceEmbeddingOptions;
   // singleton pattern
   FaceEmbedding._privateConstructor({required this.config});
 
@@ -32,60 +38,12 @@ class FaceEmbedding {
   /// config options: faceEmbeddingEnte
   static final instance =
       FaceEmbedding._privateConstructor(config: faceEmbeddingEnte);
+  factory FaceEmbedding() => instance;
 
   /// Check if the interpreter is initialized, if not initialize it with `loadModel()`
   Future<void> init() async {
-    if (_interpreter == null) {
-      await loadModel();
-    }
-  }
-
-  Future<void> loadModel() async {
-    devtools.log('MobileFaceNet loadModel is called');
-
-    try {
-      final interpreterOptions = InterpreterOptions();
-
-      // Use XNNPACK Delegate (CPU)
-      if (Platform.isAndroid) {
-        interpreterOptions.addDelegate(XNNPackDelegate());
-      }
-
-      // Use GPU Delegate
-      // doesn't work on emulator
-      if (Platform.isAndroid) {
-        interpreterOptions.addDelegate(GpuDelegateV2());
-      }
-
-      // Use Metal Delegate
-      if (Platform.isIOS) {
-        interpreterOptions.addDelegate(GpuDelegate());
-      }
-
-      // Load model from assets
-      _interpreter = _interpreter ??
-          await Interpreter.fromAsset(
-            config.modelPath,
-            options: interpreterOptions,
-          );
-
-      // Get tensor input shape [1, 112, 112, 3]
-      final inputTensors = _interpreter!.getInputTensors().first;
-      devtools.log('MobileFaceNet Input Tensors: $inputTensors');
-      // Get tensour output shape [1, 192]
-      final outputTensors = _interpreter!.getOutputTensors();
-      final outputTensor = outputTensors.first;
-      devtools.log('MobileFaceNet Output Tensors: $outputTensor');
-
-      for (var tensor in outputTensors) {
-        outputShapes.add(tensor.shape);
-        outputTypes.add(tensor.type);
-      }
-      devtools.log('MobileFaceNet.loadModel is finished');
-      // ignore: avoid_catches_without_on_clauses
-    } catch (e) {
-      devtools.log('MobileFaceNet Error while creating interpreter: $e');
-      throw MobileFaceNetInterpreterInitializationException();
+    if (_interpreter == null || _isolateInterpreter == null) {
+      await _loadModel();
     }
   }
 
@@ -114,16 +72,16 @@ class FaceEmbedding {
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
   Future<List<double>> predict(
-      Uint8List imageData, List<FaceDetectionAbsolute> faces) async {
-    assert(_interpreter != null);
-
-    final embeddingOptions = config.faceEmbeddingOptions;
+    Uint8List imageData,
+    FaceDetectionRelative face,
+  ) async {
+    assert(_interpreter != null && _isolateInterpreter != null);
 
     final stopwatchDecoding = Stopwatch()..start();
-    final inputImageMatrix =
+    final (inputImageMatrix, transformationMatrices) =
         await ImageMlIsolate.instance.preprocessMobileFaceNet(
       imageData,
-      faces,
+      [face],
     );
     final input = [inputImageMatrix[0]];
     stopwatchDecoding.stop();
@@ -140,7 +98,7 @@ class FaceEmbedding {
     devtools.log('MobileFaceNet interpreter.run is called');
     // Run inference
     try {
-      _interpreter!.run(input, output);
+      await _isolateInterpreter!.run(input, output);
       // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       devtools.log('MobileFaceNet Error while running inference: $e');
@@ -170,5 +128,57 @@ class FaceEmbedding {
     );
 
     return embedding;
+  }
+
+  Future<void> _loadModel() async {
+    _logger.info('loadModel is called');
+
+    try {
+      final interpreterOptions = InterpreterOptions();
+
+      // Android Delegates
+      // TODO: Make sure this works on both platforms: Android and iOS
+      if (Platform.isAndroid) {
+        // Use GPU Delegate (GPU). WARNING: It doesn't work on emulator
+        interpreterOptions.addDelegate(GpuDelegateV2());
+        // Use XNNPACK Delegate (CPU)
+        interpreterOptions.addDelegate(XNNPackDelegate());
+      }
+
+      // iOS Delegates
+      if (Platform.isIOS) {
+        // Use Metal Delegate (GPU)
+        interpreterOptions.addDelegate(GpuDelegate());
+      }
+
+      // Load model from assets
+      _interpreter ??= await Interpreter.fromAsset(
+        config.modelPath,
+        options: interpreterOptions,
+      );
+      _isolateInterpreter ??=
+          IsolateInterpreter(address: _interpreter!.address);
+
+      _logger.info('Interpreter created from asset: ${config.modelPath}');
+
+      // Get tensor input shape [1, 112, 112, 3]
+      final inputTensors = _interpreter!.getInputTensors().first;
+      _logger.info('Input Tensors: $inputTensors');
+      // Get tensour output shape [1, 192]
+      final outputTensors = _interpreter!.getOutputTensors();
+      final outputTensor = outputTensors.first;
+      _logger.info('Output Tensors: $outputTensor');
+
+      for (var tensor in outputTensors) {
+        outputShapes.add(tensor.shape);
+        outputTypes.add(tensor.type);
+      }
+      _logger.info('outputShapes: $outputShapes');
+      _logger.info('loadModel is finished');
+      // ignore: avoid_catches_without_on_clauses
+    } catch (e) {
+      _logger.severe('Error while creating interpreter: $e');
+      throw MobileFaceNetInterpreterInitializationException();
+    }
   }
 }

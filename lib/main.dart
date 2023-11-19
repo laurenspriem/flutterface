@@ -1,7 +1,14 @@
+import 'dart:developer' as devtools show log;
 import 'package:flutter/material.dart';
 import 'package:flutterface/ui/home_page.dart';
+import 'package:logging/logging.dart';
 
 void main() {
+  // Set up logging
+  Logger.root.level = Level.ALL; // Capture all log levels
+  Logger.root.onRecord.listen((record) {
+    devtools.log('[${record.loggerName}]: ${record.level.name}: ${record.time}: ${record.message}');
+  });
   runApp(const MyApp());
 }
 

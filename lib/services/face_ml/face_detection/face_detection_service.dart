@@ -1,27 +1,34 @@
-import 'dart:developer' as devtools show log;
 import 'dart:io';
 import 'dart:typed_data' show Uint8List;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutterface/services/face_ml/face_detection/anchors.dart';
 import 'package:flutterface/services/face_ml/face_detection/blazeface_model_config.dart';
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 import 'package:flutterface/services/face_ml/face_detection/face_detection_exceptions.dart';
+import 'package:flutterface/services/face_ml/face_detection/face_detection_options.dart';
 import 'package:flutterface/services/face_ml/face_detection/filter_extract_detections.dart';
 import 'package:flutterface/services/face_ml/face_detection/generate_anchors.dart';
 import 'package:flutterface/services/face_ml/face_detection/naive_non_max_suppression.dart';
+import 'package:flutterface/utils/image_ml_isolate.dart';
 import 'package:flutterface/utils/image_ml_util.dart';
+import 'package:logging/logging.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 class FaceDetection {
   Interpreter? _interpreter;
+  IsolateInterpreter? _isolateInterpreter;
   int get getAddress => _interpreter!.address;
 
   final outputShapes = <List<int>>[];
   final outputTypes = <TensorType>[];
 
+  final _logger = Logger('FaceDetectionService');
+
   late List<Anchor> _anchors;
   late int originalImageWidth;
   late int originalImageHeight;
+  late final FaceDetectionOptions _faceOptions;
 
   final BlazeFaceModelConfig config;
   // singleton pattern
@@ -35,139 +42,34 @@ class FaceDetection {
   /// config options: faceDetectionFront // faceDetectionBackWeb // faceDetectionShortRange //faceDetectionFullRangeSparse; // faceDetectionFullRangeDense (faster than web while still accurate)
   static final instance =
       FaceDetection._privateConstructor(config: faceDetectionBackWeb);
+  factory FaceDetection() => instance;
 
   /// Check if the interpreter is initialized, if not initialize it with `loadModel()`
   Future<void> init() async {
-    if (_interpreter == null) {
-      await loadModel();
+    if (_interpreter == null || _isolateInterpreter == null) {
+      await _loadModel();
     }
   }
 
-  /// Initialize the interpreter by loading the model file.
-  Future<void> loadModel() async {
-    devtools.log('BlazeFace.loadModel is called');
-
-    final anchorOption = config.anchorOptions;
-
-    try {
-      final interpreterOptions = InterpreterOptions();
-
-      // Use XNNPACK Delegate (CPU)
-      if (Platform.isAndroid) {
-        interpreterOptions.addDelegate(XNNPackDelegate());
-      }
-
-      // Use GPU Delegate (GPU)
-      // doesn't work on emulator
-      if (Platform.isAndroid) {
-        interpreterOptions.addDelegate(GpuDelegateV2());
-      }
-
-      // Use Metal Delegate
-      if (Platform.isIOS) {
-        interpreterOptions.addDelegate(GpuDelegate());
-      }
-
-      // Create anchor boxes for BlazeFace
-      _anchors = generateAnchors(anchorOption);
-
-      // Load model from assets
-      _interpreter = _interpreter ??
-          await Interpreter.fromAsset(
-            config.modelPath,
-            options: interpreterOptions,
-          );
-
-      // Get tensor input shape [1, 128, 128, 3]
-      final inputTensors = _interpreter!.getInputTensors().first;
-      devtools.log('BlazeFace Input Tensors: $inputTensors');
-      // Get tensour output shape [1, 896, 16]
-      final outputTensors = _interpreter!.getOutputTensors();
-      final outputTensor = outputTensors.first;
-      devtools.log('BlazeFace Output Tensors: $outputTensor');
-
-      for (var tensor in outputTensors) {
-        outputShapes.add(tensor.shape);
-        outputTypes.add(tensor.type);
-      }
-      devtools.log('BlazeFace.loadModel is finished');
-      // ignore: avoid_catches_without_on_clauses
-    } catch (e) {
-      devtools.log('BlazeFace Error while creating interpreter: $e');
-      throw BlazeFaceInterpreterInitializationException();
-    }
-  }
-
-  // Future<List<List<List<num>>>> getPreprocessedImage(
-  //   ui.Image image,
-  // ) async {
-  //   devtools.log('BlazeFace preprocessing is called');
-  //   final faceOptions = config.faceOptions;
-
-  //   originalImageWidth = image.width;
-  //   originalImageHeight = image.height;
-  //   devtools.log(
-  //     'originalImageWidth: $originalImageWidth, originalImageHeight: $originalImageHeight',
-  //   );
-
-  //   // Resize image for model input
-  //   final ui.Image imageInput = await resizeImage(
-  //     image,
-  //     faceOptions.inputWidth,
-  //     faceOptions.inputHeight,
-  //   );
-
-  //   // Get image matrix representation [inputWidt, inputHeight, 3]
-  //   final imageMatrix = createInputMatrix(imageInput, normalize: true);
-
-  //   devtools.log('BlazeFace preprocessing is finished');
-
-  //   return imageMatrix;
-  // }
-
-  /// Creates an empty matrix with the specified shape.
-  ///
-  /// The `shape` argument must be a list of length 2 or 3, where the first
-  /// element represents the number of rows, the second element represents
-  /// the number of columns, and the optional third element represents the
-  /// number of channels. The function returns a matrix filled with zeros.
-  ///
-  /// Throws an [ArgumentError] if the `shape` argument is invalid.
-  List createEmptyOutputMatrix(List<int> shape) {
-    if (shape.length < 2 || shape.length > 3) {
-      throw ArgumentError('Shape must have length 2 or 3');
-    }
-    if (shape.length == 2) {
-      return List.generate(shape[0], (_) => List.filled(shape[1], 0.0));
-    } else {
-      return List.generate(
-        shape[0],
-        (_) => List.generate(shape[1], (_) => List.filled(shape[2], 0.0)),
-      );
-    }
-  }
-
-  // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
+  /// Detects faces in the given image data.
   Future<List<FaceDetectionRelative>> predict(Uint8List imageData) async {
-    assert(_interpreter != null);
+    assert(_interpreter != null && _isolateInterpreter != null);
 
-    final faceOptions = config.faceOptions;
+    final stopwatch = Stopwatch()..start();
 
     final stopwatchDecoding = Stopwatch()..start();
     final List<List<List<num>>> inputImageMatrix =
         await ImageMlIsolate.instance.preprocessImage(
       imageData,
       normalize: true,
-      requiredWidth: faceOptions.inputWidth,
-      requiredHeight: faceOptions.inputHeight,
+      requiredWidth: _faceOptions.inputWidth,
+      requiredHeight: _faceOptions.inputHeight,
     );
     final input = [inputImageMatrix];
     stopwatchDecoding.stop();
-    devtools.log(
-      'BlazeFace image decoding and preprocessing is finished, in ${stopwatchDecoding.elapsedMilliseconds}ms',
+    _logger.info(
+      'Image decoding and preprocessing is finished, in ${stopwatchDecoding.elapsedMilliseconds}ms',
     );
-
-    final stopwatch = Stopwatch()..start();
 
     final outputFaces = createEmptyOutputMatrix(outputShapes[0]);
     final outputScores = createEmptyOutputMatrix(outputShapes[1]);
@@ -176,23 +78,19 @@ class FaceDetection {
       1: outputScores,
     };
 
-    devtools.log('Input of shape ${input.shape}');
-    devtools
-        .log('Outputs: of shape ${outputs[0]?.shape} and ${outputs[1]?.shape}');
-
-    devtools.log('BlazeFace interpreter.run is called');
+    _logger.info('interpreter.run is called');
     // Run inference
-    final secondStopwatch = Stopwatch()..start();
+    final stopwatchInterpreter = Stopwatch()..start();
     try {
-      _interpreter!.runForMultipleInputs([input], outputs);
-      // ignore: avoid_catches_without_on_clauses
-    } catch (e) {
-      devtools.log('BlazeFace Error while running inference: $e');
+      await _isolateInterpreter!.runForMultipleInputs([input], outputs);
+    } catch (e, s) {
+      _logger.severe('Error while running inference: $e \n $s');
       throw BlazeFaceInterpreterRunException();
     }
-    secondStopwatch.stop();
-    devtools.log(
-        'BlazeFace interpreter.run is finished, in ${secondStopwatch.elapsedMilliseconds} ms');
+    stopwatchInterpreter.stop();
+    _logger.info(
+      'interpreter.run is finished, in ${stopwatchInterpreter.elapsedMilliseconds} ms',
+    );
 
     // Get output tensors
     final rawBoxes = outputs[0]![0]; // Nested List of shape [896, 16]
@@ -221,7 +119,7 @@ class FaceDetection {
     // devtools.log('rawBoxesFirstCoordinates: $flatBoxesFirstCoordinates');
 
     var relativeDetections = filterExtractDetections(
-      options: faceOptions,
+      options: _faceOptions,
       rawScores: rawScores,
       rawBoxes: rawBoxes,
       anchors: _anchors,
@@ -229,19 +127,133 @@ class FaceDetection {
 
     relativeDetections = naiveNonMaxSuppression(
       detections: relativeDetections,
-      iouThreshold: faceOptions.iouThreshold,
+      iouThreshold: _faceOptions.iouThreshold,
     );
 
     if (relativeDetections.isEmpty) {
-      devtools.log('No face detected');
+      _logger.info('No face detected');
       return <FaceDetectionRelative>[];
     }
 
     stopwatch.stop();
-    devtools.log(
-      'BlazeFace.predict() face detection executed in ${stopwatch.elapsedMilliseconds}ms',
+    _logger.info(
+      'predict() face detection executed in ${stopwatch.elapsedMilliseconds}ms',
     );
 
     return relativeDetections;
+  }
+
+  Future<List<FaceDetectionRelative>> predictInTwoPhases(
+    Uint8List thumbnailData,
+    // Uint8List fileData, TODO: add this, and use it for cropAndPadFace
+  ) async {
+    // Get the bounding boxes of the faces
+    final List<FaceDetectionRelative> phase1Faces =
+        await predict(thumbnailData);
+
+    final finalDetections = <FaceDetectionRelative>[];
+    for (final FaceDetectionRelative phase1Face in phase1Faces) {
+      // Enlarge the bounding box by factor 2
+      final List<double> imageBox = getEnlargedRelativeBox(phase1Face.box, 2.0);
+      // Crop and pad the image
+      final paddedImage =
+          await ImageMlIsolate.instance.cropAndPadFace(thumbnailData, imageBox);
+      // Enlarge the imageBox, to help with transformation to original image
+      final List<double> paddedBox = getEnlargedRelativeBox(imageBox, 2.0);
+
+      // Get the bounding boxes of the faces
+      final List<FaceDetectionRelative> phase2Faces =
+          await FaceDetection.instance.predict(paddedImage);
+      // Transform the bounding boxes to original image
+      for (final phase2Detection in phase2Faces) {
+        phase2Detection.transformRelativeToOriginalImage(
+          imageBox,
+          paddedBox,
+        );
+      }
+
+      FaceDetectionRelative? selected;
+      if (phase2Faces.length == 1) {
+        selected = phase2Faces[0];
+      } else if (phase2Faces.length > 1) {
+        selected = phase1Face.getNearestDetection(phase2Faces);
+      }
+
+      if (selected != null &&
+          selected.score > _faceOptions.minScoreSigmoidThresholdSecondPass) {
+        finalDetections.add(selected);
+      }
+    }
+
+    final finalFilteredDetections = naiveNonMaxSuppression(
+      detections: finalDetections,
+      iouThreshold: config.faceOptions.iouThreshold,
+    );
+
+    if (finalFilteredDetections.isEmpty) {
+      _logger.info('No face detected');
+      return <FaceDetectionRelative>[];
+    }
+
+    return finalFilteredDetections;
+  }
+
+  /// Initialize the interpreter by loading the model file.
+  Future<void> _loadModel() async {
+    _logger.info('loadModel is called');
+
+    final anchorOption = config.anchorOptions;
+    _faceOptions = config.faceOptions;
+
+    try {
+      final interpreterOptions = InterpreterOptions();
+
+      // Android Delegates
+      // TODO: Make sure this works on both platforms: Android and iOS
+      if (Platform.isAndroid) {
+        // Use GPU Delegate (GPU). WARNING: It doesn't work on emulator. And doesn't speed up current version of BlazeFace used.
+        interpreterOptions.addDelegate(GpuDelegateV2());
+        // Use XNNPACK Delegate (CPU)
+        interpreterOptions.addDelegate(XNNPackDelegate());
+      }
+
+      // iOS Delegates
+      if (Platform.isIOS) {
+        // Use Metal Delegate (GPU)
+        interpreterOptions.addDelegate(GpuDelegate());
+      }
+
+      // Create anchor boxes for BlazeFace
+      _anchors = generateAnchors(anchorOption);
+
+      // Load model from assets
+      _interpreter ??= await Interpreter.fromAsset(
+        config.modelPath,
+        options: interpreterOptions,
+      );
+      _isolateInterpreter ??=
+          IsolateInterpreter(address: _interpreter!.address);
+
+      _logger.info('Interpreter created from asset: ${config.modelPath}');
+
+      // Get tensor input shape [1, 128, 128, 3]
+      final inputTensors = _interpreter!.getInputTensors().first;
+      _logger.info('Input Tensors: $inputTensors');
+      // Get tensour output shape [1, 896, 16]
+      final outputTensors = _interpreter!.getOutputTensors();
+      final outputTensor = outputTensors.first;
+      _logger.info('Output Tensors: $outputTensor');
+
+      for (var tensor in outputTensors) {
+        outputShapes.add(tensor.shape);
+        outputTypes.add(tensor.type);
+      }
+      _logger.info('outputShapes: $outputShapes');
+      _logger.info('loadModel is finished');
+      // ignore: avoid_catches_without_on_clauses
+    } catch (e) {
+      _logger.severe('Error while creating interpreter: $e');
+      throw BlazeFaceInterpreterInitializationException();
+    }
   }
 }
