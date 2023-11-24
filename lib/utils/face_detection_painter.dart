@@ -18,7 +18,7 @@ class FacePainter extends CustomPainter {
     final Paint boundingBoxPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0
-      ..color = Colors.blue;
+      ..color = Colors.yellow;
 
     final scaleY = availableSize.height / imageSize.height;
     final scaleX = availableSize.width / imageSize.width;
@@ -39,7 +39,7 @@ class FacePainter extends CustomPainter {
       // Draw keypoints
       final Paint keypointPaint = Paint()
         ..style = PaintingStyle.fill
-        ..color = Colors.red;
+        ..color = Colors.blue;
 
       final allKeypoints = face.allKeypoints;
       for (var keypoint in allKeypoints) {
