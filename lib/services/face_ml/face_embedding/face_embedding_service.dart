@@ -26,7 +26,8 @@ class FaceEmbedding {
   final _logger = Logger('FaceEmbeddingService');
 
   final MobileFaceNetModelConfig config;
-  late final FaceEmbeddingOptions embeddingOptions = config.faceEmbeddingOptions;
+  late final FaceEmbeddingOptions embeddingOptions =
+      config.faceEmbeddingOptions;
   // singleton pattern
   FaceEmbedding._privateConstructor({required this.config});
 
@@ -78,7 +79,7 @@ class FaceEmbedding {
     assert(_interpreter != null && _isolateInterpreter != null);
 
     final stopwatchDecoding = Stopwatch()..start();
-    final (inputImageMatrix, transformationMatrices) =
+    final (inputImageMatrix, alignmentResults) =
         await ImageMlIsolate.instance.preprocessMobileFaceNet(
       imageData,
       [face],

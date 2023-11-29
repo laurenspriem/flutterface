@@ -7,10 +7,10 @@ import 'package:test/test.dart';
 // run `dart test test/similarity_transform_test.dart ` to test
 void main() {
   final exampleLandmarks = [
-    <int>[103, 114],
-    <int>[147, 111],
-    <int>[129, 142],
-    <int>[128, 160],
+    <double>[103, 114],
+    <double>[147, 111],
+    <double>[129, 142],
+    <double>[128, 160],
   ];
   final expectedParameters = Matrix.fromList([
     [0.81073804, -0.05217403, -39.88931937],
@@ -59,10 +59,10 @@ void main() {
 
     // Let's test again
     final secondExampleLandmarks = [
-      <int>[107, 113],
-      <int>[147, 116],
-      <int>[128, 137],
-      <int>[127, 155],
+      <double>[107, 113],
+      <double>[147, 116],
+      <double>[128, 137],
+      <double>[127, 155],
     ];
     final secondExpectedParameters = Matrix.fromList([
       [9.42784402e-01, 2.96919308e-02, -6.78388902e+01],

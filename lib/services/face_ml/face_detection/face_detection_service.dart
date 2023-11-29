@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutterface/services/face_ml/face_detection/anchors.dart';
 import 'package:flutterface/services/face_ml/face_detection/blazeface_model_config.dart';
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
@@ -58,12 +59,14 @@ class FaceDetection {
     final stopwatch = Stopwatch()..start();
 
     final stopwatchDecoding = Stopwatch()..start();
-    final List<List<List<num>>> inputImageMatrix =
+    final (inputImageMatrix, originalSize, newSize) =
         await ImageMlIsolate.instance.preprocessImage(
       imageData,
       normalize: true,
       requiredWidth: _faceOptions.inputWidth,
       requiredHeight: _faceOptions.inputHeight,
+      maintainAspectRatio: true,
+      quality: FilterQuality.medium,
     );
     final input = [inputImageMatrix];
     stopwatchDecoding.stop();
@@ -124,6 +127,17 @@ class FaceDetection {
       rawBoxes: rawBoxes,
       anchors: _anchors,
     );
+
+    // Account for the fact that the aspect ratio was maintained
+    for (final faceDetection in relativeDetections) {
+      faceDetection.correctForMaintainedAspectRatio(
+        Size(
+          _faceOptions.inputWidth.toDouble(),
+          _faceOptions.inputHeight.toDouble(),
+        ),
+        newSize,
+      );
+    }
 
     relativeDetections = naiveNonMaxSuppression(
       detections: relativeDetections,

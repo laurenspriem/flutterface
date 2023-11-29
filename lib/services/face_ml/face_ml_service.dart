@@ -1,3 +1,4 @@
+import 'dart:developer' show log;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
@@ -50,7 +51,7 @@ class FaceMlService {
     try {
       // Get the bounding boxes of the faces
       final List<FaceDetectionRelative> faces =
-          await FaceDetection.instance.predictInTwoPhases(imageData);
+          await FaceDetection.instance.predict(imageData);
 
       return faces;
     } on BlazeFaceInterpreterInitializationException {
@@ -133,7 +134,7 @@ class FaceMlService {
   ///
   /// Throws `CouldNotInitializeFaceEmbeddor`, `CouldNotRunFaceEmbeddor` or `GeneralFaceMlException` if the face embedding fails.
   Future<List<double>> embedSingleFace(
-    Uint8List faceData,
+    Uint8List imageData,
     FaceDetectionRelative face,
   ) async {
     try {
@@ -142,7 +143,9 @@ class FaceMlService {
 
       // Get the embedding of the face
       final List<double> embedding =
-          await FaceEmbedding.instance.predict(faceData, face);
+          await FaceEmbedding.instance.predict(imageData, face);
+
+      log('Embedding: $embedding');
 
       return embedding;
     } on MobileFaceNetInterpreterInitializationException {

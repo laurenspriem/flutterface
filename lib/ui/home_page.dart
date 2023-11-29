@@ -183,9 +183,10 @@ class _HomePageState extends State<HomePage> {
     });
 
     faceEmbeddingResult = await FaceMlService.instance.embedSingleFace(
-      faceAlignedData!,
+      imageOriginalData!,
       faceDetectionResultsRelative[showingFaceCounter],
     );
+    print('Embedding: $faceEmbeddingResult');
 
     setState(() {
       isPredicting = false;
