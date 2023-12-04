@@ -11,4 +11,10 @@ mixin ModelFile {
       'assets/models/blazeface_back_ente_web.tflite';
   static const String faceEmbeddingEnte =
       'assets/models/mobilefacenet_ente_web.tflite';
+  static const String yoloV5FaceN256x320 =
+      'assets/models/yolov5n_face_256x320_float32.tflite';
+  static const String yoloV5FaceS256x320 =
+      'assets/models/yolov5s_face_256x320_float32.tflite';
+  static const String yoloV5FaceS480x640 =
+      'assets/models/yolov5s_face_480x640_float32.tflite';
 }

@@ -13,7 +13,8 @@ import 'package:logging/logging.dart';
 import 'package:synchronized/synchronized.dart';
 
 enum ImageOperation {
-  preprocessStandard,
+  preprocessBlazeFace,
+  preprocessYOLOtflite,
   preprocessFaceAlign,
   preprocessMobileFaceNet,
   generateFaceThumbnail,
@@ -94,9 +95,10 @@ class ImageMlIsolate {
       final sendPort = message[2] as SendPort;
 
       switch (function) {
-        case ImageOperation.preprocessStandard:
+        case ImageOperation.preprocessBlazeFace:
           final imageData = args['imageData'] as Uint8List;
           final normalize = args['normalize'] as bool;
+          final int normalization = normalize ? 2 : -1;
           final requiredWidth = args['requiredWidth'] as int;
           final requiredHeight = args['requiredHeight'] as int;
           final qualityIndex = args['quality'] as int;
@@ -104,7 +106,31 @@ class ImageMlIsolate {
           final quality = FilterQuality.values[qualityIndex];
           final (result, originalSize, newSize) = await preprocessImageToMatrix(
             imageData,
-            normalize: normalize,
+            normalization: normalization,
+            requiredWidth: requiredWidth,
+            requiredHeight: requiredHeight,
+            quality: quality,
+            maintainAspectRatio: maintainAspectRatio,
+          );
+          sendPort.send({
+            'inputs': result,
+            'originalWidth': originalSize.width,
+            'originalHeight': originalSize.height,
+            'newWidth': newSize.width,
+            'newHeight': newSize.height,
+          });
+        case ImageOperation.preprocessYOLOtflite:
+          final imageData = args['imageData'] as Uint8List;
+          final normalize = args['normalize'] as bool;
+          final int normalization = normalize ? 1 : -1;
+          final requiredWidth = args['requiredWidth'] as int;
+          final requiredHeight = args['requiredHeight'] as int;
+          final qualityIndex = args['quality'] as int;
+          final maintainAspectRatio = args['maintainAspectRatio'] as bool;
+          final quality = FilterQuality.values[qualityIndex];
+          final (result, originalSize, newSize) = await preprocessImageToMatrix(
+            imageData,
+            normalization: normalization,
             requiredWidth: requiredWidth,
             requiredHeight: requiredHeight,
             quality: quality,
@@ -129,17 +155,17 @@ class ImageMlIsolate {
         case ImageOperation.preprocessMobileFaceNet:
           final imageData = args['imageData'] as Uint8List;
           final facesJson = args['facesJson'] as List<Map<String, dynamic>>;
-            final (inputs, alignmentResults) =
-                await preprocessToMobileFaceNetInput(
-              imageData,
-              facesJson,
-            );
-        final List<Map<String, dynamic>> alignmentResultsJson =
-            alignmentResults.map((result) => result.toJson()).toList();
-        sendPort.send({
-          'inputs': inputs,
-          'alignmentResultsJson': alignmentResultsJson,
-        });
+          final (inputs, alignmentResults) =
+              await preprocessToMobileFaceNetInput(
+            imageData,
+            facesJson,
+          );
+          final List<Map<String, dynamic>> alignmentResultsJson =
+              alignmentResults.map((result) => result.toJson()).toList();
+          sendPort.send({
+            'inputs': inputs,
+            'alignmentResultsJson': alignmentResultsJson,
+          });
         case ImageOperation.generateFaceThumbnail:
           final imageData = args['imageData'] as Uint8List;
           final faceDetectionJson =
@@ -201,10 +227,10 @@ class ImageMlIsolate {
 
   /// Preprocesses [imageData] for standard ML models inside a separate isolate.
   ///
-  /// Returns a [Num3DInputMatrix] image usable for ML inference.
+  /// Returns a [Num3DInputMatrix] image usable for ML inference, in shape.
   ///
   /// Uses [preprocessImageToMatrix] inside the isolate.
-  Future<(Num3DInputMatrix, Size, Size)> preprocessImage(
+  Future<(Num3DInputMatrix, Size, Size)> preprocessImageBlazeFace(
     Uint8List imageData, {
     required bool normalize,
     required int requiredWidth,
@@ -214,7 +240,41 @@ class ImageMlIsolate {
   }) async {
     final Map<String, dynamic> results = await _runInIsolate(
       (
-        ImageOperation.preprocessStandard,
+        ImageOperation.preprocessBlazeFace,
+        {
+          'imageData': imageData,
+          'normalize': normalize,
+          'requiredWidth': requiredWidth,
+          'requiredHeight': requiredHeight,
+          'quality': quality.index,
+          'maintainAspectRatio': maintainAspectRatio,
+        },
+      ),
+    );
+    final inputs = results['inputs'] as Num3DInputMatrix;
+    final originalSize = Size(
+      results['originalWidth'] as double,
+      results['originalHeight'] as double,
+    );
+    final newSize = Size(
+      results['newWidth'] as double,
+      results['newHeight'] as double,
+    );
+    return (inputs, originalSize, newSize);
+  }
+
+  /// Uses [preprocessImageToMatrix] inside the isolate.
+  Future<(Num3DInputMatrix, Size, Size)> preprocessImageYOLOtflite(
+    Uint8List imageData, {
+    required bool normalize,
+    required int requiredWidth,
+    required int requiredHeight,
+    FilterQuality quality = FilterQuality.medium,
+    bool maintainAspectRatio = true,
+  }) async {
+    final Map<String, dynamic> results = await _runInIsolate(
+      (
+        ImageOperation.preprocessYOLOtflite,
         {
           'imageData': imageData,
           'normalize': normalize,

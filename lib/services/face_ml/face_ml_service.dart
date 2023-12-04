@@ -2,8 +2,8 @@ import 'dart:developer' show log;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
-import 'package:flutterface/services/face_ml/face_detection/face_detection_exceptions.dart';
-import 'package:flutterface/services/face_ml/face_detection/face_detection_service.dart';
+import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face_detection_exceptions.dart';
+import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face_detection_service.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_exceptions.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_service.dart';
 import 'package:flutterface/services/face_ml/face_ml_exceptions.dart';
@@ -23,9 +23,9 @@ class FaceMlService {
   Future<void> init() async {
     _logger.info('init called');
     try {
-      await FaceDetection.instance.init();
+      await YOLOFaceDetection.instance.init();
     } catch (e, s) {
-      _logger.severe('Could not initialize blazeface', e, s);
+      _logger.severe('Could not initialize YOLO', e, s);
     }
     try {
       await ImageMlIsolate.instance.init();
@@ -51,12 +51,12 @@ class FaceMlService {
     try {
       // Get the bounding boxes of the faces
       final List<FaceDetectionRelative> faces =
-          await FaceDetection.instance.predict(imageData);
+          await YOLOFaceDetection.instance.predict(imageData);
 
       return faces;
-    } on BlazeFaceInterpreterInitializationException {
+    } on YOLOInterpreterInitializationException {
       throw CouldNotInitializeFaceDetector();
-    } on BlazeFaceInterpreterRunException {
+    } on YOLOInterpreterRunException {
       throw CouldNotRunFaceDetector();
       // ignore: avoid_catches_without_on_clauses
     } catch (e) {
