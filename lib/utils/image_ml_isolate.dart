@@ -15,6 +15,7 @@ import 'package:synchronized/synchronized.dart';
 enum ImageOperation {
   preprocessBlazeFace,
   preprocessYOLOtflite,
+  preprocessYOLOonnx,
   preprocessFaceAlign,
   preprocessMobileFaceNet,
   generateFaceThumbnail,
@@ -129,6 +130,30 @@ class ImageMlIsolate {
           final maintainAspectRatio = args['maintainAspectRatio'] as bool;
           final quality = FilterQuality.values[qualityIndex];
           final (result, originalSize, newSize) = await preprocessImageToMatrix(
+            imageData,
+            normalization: normalization,
+            requiredWidth: requiredWidth,
+            requiredHeight: requiredHeight,
+            quality: quality,
+            maintainAspectRatio: maintainAspectRatio,
+          );
+          sendPort.send({
+            'inputs': result,
+            'originalWidth': originalSize.width,
+            'originalHeight': originalSize.height,
+            'newWidth': newSize.width,
+            'newHeight': newSize.height,
+          });
+        case ImageOperation.preprocessYOLOonnx:
+          final imageData = args['imageData'] as Uint8List;
+          final normalize = args['normalize'] as bool;
+          final int normalization = normalize ? 1 : -1;
+          final requiredWidth = args['requiredWidth'] as int;
+          final requiredHeight = args['requiredHeight'] as int;
+          final qualityIndex = args['quality'] as int;
+          final maintainAspectRatio = args['maintainAspectRatio'] as bool;
+          final quality = FilterQuality.values[qualityIndex];
+          final (result, originalSize, newSize) = await preprocessImageToFloat32ChannelsFirst(
             imageData,
             normalization: normalization,
             requiredWidth: requiredWidth,
@@ -286,6 +311,40 @@ class ImageMlIsolate {
       ),
     );
     final inputs = results['inputs'] as Num3DInputMatrix;
+    final originalSize = Size(
+      results['originalWidth'] as double,
+      results['originalHeight'] as double,
+    );
+    final newSize = Size(
+      results['newWidth'] as double,
+      results['newHeight'] as double,
+    );
+    return (inputs, originalSize, newSize);
+  }
+
+  /// Uses [preprocessImageToFloat32ChannelsFirst] inside the isolate.
+  Future<(Float32List, Size, Size)> preprocessImageYOLOonnx(
+    Uint8List imageData, {
+    required bool normalize,
+    required int requiredWidth,
+    required int requiredHeight,
+    FilterQuality quality = FilterQuality.medium,
+    bool maintainAspectRatio = true,
+  }) async {
+    final Map<String, dynamic> results = await _runInIsolate(
+      (
+        ImageOperation.preprocessYOLOonnx,
+        {
+          'imageData': imageData,
+          'normalize': normalize,
+          'requiredWidth': requiredWidth,
+          'requiredHeight': requiredHeight,
+          'quality': quality.index,
+          'maintainAspectRatio': maintainAspectRatio,
+        },
+      ),
+    );
+    final inputs = results['inputs'] as Float32List;
     final originalSize = Size(
       results['originalWidth'] as double,
       results['originalHeight'] as double,

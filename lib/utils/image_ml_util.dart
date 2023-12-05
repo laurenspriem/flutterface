@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math' show min, max;
-import 'dart:typed_data' show Uint8List, ByteData;
+import 'dart:typed_data' show ByteData, Float32List, Uint8List;
 import 'dart:ui';
 
 import 'package:flutter/painting.dart' as paint show decodeImageFromList;
@@ -114,6 +114,27 @@ Num3DInputMatrix createInputMatrixFromImage(
       },
     ),
   );
+}
+
+Float32List createFloat32ListFromImageChannelsFirst(
+  Image image,
+  ByteData byteDataRgba, {
+  double Function(num) normFunction = normalizePixelRange2,
+}) {
+  final convertedBytes = Float32List(3 * image.height * image.width);
+  final buffer = Float32List.view(convertedBytes.buffer);
+
+  int pixelIndex = 0;
+
+  for (var i = 0; i < image.height; i++) {
+    for (var j = 0; j < image.width; j++) {
+      final pixel = readPixelColor(image, byteDataRgba, j, i);
+      buffer[pixelIndex++] = normFunction(pixel.red);
+      buffer[pixelIndex++] = normFunction(pixel.green);
+      buffer[pixelIndex++] = normFunction(pixel.blue);
+    }
+  }
+  return convertedBytes.buffer.asFloat32List();
 }
 
 /// Creates an input matrix from the specified image, which can be used for inference
@@ -494,6 +515,53 @@ Future<(Num3DInputMatrix, Size, Size)> preprocessImageToMatrix(
   );
 
   return (imageMatrix, originalSize, newSize);
+}
+
+Future<(Float32List, Size, Size)> preprocessImageToFloat32ChannelsFirst(
+  Uint8List imageData, {
+  required int normalization,
+  required int requiredWidth,
+  required int requiredHeight,
+  FilterQuality quality = FilterQuality.medium,
+  maintainAspectRatio = true,
+}) async {
+  final normFunction = normalization == 2
+      ? normalizePixelRange2
+      : normalization == 1
+          ? normalizePixelRange1
+          : normalizePixelNoRange;
+  final Image image = await decodeImageFromData(imageData);
+  final originalSize = Size(image.width.toDouble(), image.height.toDouble());
+
+  if (image.width == requiredWidth && image.height == requiredHeight) {
+    final ByteData imgByteData = await getByteDataFromImage(image);
+    return (
+      createFloat32ListFromImageChannelsFirst(
+        image,
+        imgByteData,
+        normFunction: normFunction,
+      ),
+      originalSize,
+      originalSize
+    );
+  }
+
+  final (resizedImage, newSize) = await resizeImage(
+    image,
+    requiredWidth,
+    requiredHeight,
+    quality: quality,
+    maintainAspectRatio: maintainAspectRatio,
+  );
+
+  final ByteData imgByteData = await getByteDataFromImage(resizedImage);
+  final Float32List imageFloat32List = createFloat32ListFromImageChannelsFirst(
+    resizedImage,
+    imgByteData,
+    normFunction: normFunction,
+  );
+
+  return (imageFloat32List, originalSize, newSize);
 }
 
 /// Preprocesses [imageData] based on [faceLandmarks] to align the faces in the images.

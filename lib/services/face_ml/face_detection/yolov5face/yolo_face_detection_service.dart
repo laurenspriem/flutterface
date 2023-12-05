@@ -37,7 +37,7 @@ class YOLOFaceDetection {
   ///
   /// config options: yoloV5FaceN //
   static final instance =
-      YOLOFaceDetection._privateConstructor(config: yoloV5FaceS480x640);
+      YOLOFaceDetection._privateConstructor(config: yoloV5FaceS480x640tflite);
   factory YOLOFaceDetection() => instance;
 
   /// Check if the interpreter is initialized, if not initialize it with `loadModel()`
@@ -97,28 +97,6 @@ class YOLOFaceDetection {
     final stride32 = outputs[0]![0]; // Nested List of shape [8, 10, 16, 3]
     final stride16 = outputs[1]![0]; // Nested List of shape [16, 20, 16, 3]
     final stride8 = outputs[2]![0]; // Nested List of shape [32, 40, 16, 3]
-
-    // // Visually inspecting the raw scores
-    // final List<dynamic> flatScores = List.filled(896, 0);
-    // for (var i = 0; i < rawScores.length; i++) {
-    //   flatScores[i] = rawScores[i][0];
-    // }
-    // final flatScoresSorted = flatScores;
-    // flatScoresSorted.sort();
-    // devtools.log('Ten highest (raw) scores: ${flatScoresSorted.sublist(886)}');
-
-    // // Visually inspecting the raw boxes
-    // final List<dynamic> flatBoxesFirstCoordinates = List.filled(896, 0);
-    // final List<dynamic> flatBoxesSecondCoordinates = List.filled(896, 0);
-    // final List<dynamic> flatBoxesThirdCoordinates = List.filled(896, 0);
-    // final List<dynamic> flatBoxesFourthCoordinates = List.filled(896, 0);
-    // for (var i = 0; i < rawBoxes[0].length; i++) {
-    //   flatBoxesFirstCoordinates[i] = rawBoxes[i][0];
-    //   flatBoxesSecondCoordinates[i] = rawBoxes[i][1];
-    //   flatBoxesThirdCoordinates[i] = rawBoxes[i][2];
-    //   flatBoxesFourthCoordinates[i] = rawBoxes[i][3];
-    // }
-    // devtools.log('rawBoxesFirstCoordinates: $flatBoxesFirstCoordinates');
 
     var relativeDetections = filterExtractDetectionsYOLOtflite(
       options: _faceOptions,

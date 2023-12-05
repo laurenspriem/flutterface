@@ -3,7 +3,7 @@ import 'dart:typed_data' show Uint8List;
 
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face_detection_exceptions.dart';
-import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face_detection_service.dart';
+import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face_detection_onnx.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_exceptions.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_service.dart';
 import 'package:flutterface/services/face_ml/face_ml_exceptions.dart';
@@ -23,7 +23,7 @@ class FaceMlService {
   Future<void> init() async {
     _logger.info('init called');
     try {
-      await YOLOFaceDetection.instance.init();
+      await YOLOFaceDetectionONNX.instance.init();
     } catch (e, s) {
       _logger.severe('Could not initialize YOLO', e, s);
     }
@@ -51,7 +51,7 @@ class FaceMlService {
     try {
       // Get the bounding boxes of the faces
       final List<FaceDetectionRelative> faces =
-          await YOLOFaceDetection.instance.predict(imageData);
+          await YOLOFaceDetectionONNX.instance.predict(imageData);
 
       return faces;
     } on YOLOInterpreterInitializationException {
