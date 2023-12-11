@@ -98,7 +98,7 @@ class YOLOFaceDetection {
     final stride16 = outputs[1]![0]; // Nested List of shape [16, 20, 16, 3]
     final stride8 = outputs[2]![0]; // Nested List of shape [32, 40, 16, 3]
 
-    var relativeDetections = filterExtractDetectionsYOLOtflite(
+    var relativeDetections = filterExtractDetectionsYOLOtfliteDebug(
       options: _faceOptions,
       stride32: stride32,
       stride16: stride16,

@@ -12,15 +12,8 @@ import 'package:flutterface/utils/image_ml_isolate.dart';
 import 'package:logging/logging.dart';
 import 'package:onnxruntime/onnxruntime.dart';
 
-class YOLOFaceDetectionONNX {
+class YoloOnnxFaceDetection {
   final _logger = Logger('YOLOFaceDetectionService');
-
-  // Interpreter? _interpreter;
-  // IsolateInterpreter? _isolateInterpreter;
-  // int get getAddress => _interpreter!.address;
-
-  // final outputShapes = <List<int>>[];
-  // final outputTypes = <TensorType>[];
 
   OrtSessionOptions? _sessionOptions;
   OrtSession? _session;
@@ -31,7 +24,7 @@ class YOLOFaceDetectionONNX {
 
   final YOLOModelConfig config;
   // singleton pattern
-  YOLOFaceDetectionONNX._privateConstructor({required this.config});
+  YoloOnnxFaceDetection._privateConstructor({required this.config});
 
   /// Use this instance to access the FaceDetection service. Make sure to call `init()` before using it.
   /// e.g. `await FaceDetection.instance.init();`
@@ -39,10 +32,10 @@ class YOLOFaceDetectionONNX {
   /// Then you can use `predict()` to get the bounding boxes of the faces, so `FaceDetection.instance.predict(imageData)`
   ///
   /// config options: yoloV5FaceN //
-  static final instance = YOLOFaceDetectionONNX._privateConstructor(
-    config: yoloV5FaceS480x640onnx,
+  static final instance = YoloOnnxFaceDetection._privateConstructor(
+    config: yoloV5FaceS640x640onnx,
   );
-  factory YOLOFaceDetectionONNX() {
+  factory YoloOnnxFaceDetection() {
     OrtEnv.instance.init();
     return instance;
   }
@@ -74,7 +67,7 @@ class YOLOFaceDetectionONNX {
 
     final stopwatchDecoding = Stopwatch()..start();
     final (inputImageList, originalSize, newSize) =
-        await ImageMlIsolate.instance.preprocessImageYOLOonnx(
+        await ImageMlIsolate.instance.preprocessImageYoloOnnx(
       imageData,
       normalize: true,
       requiredWidth: _faceOptions.inputWidth,
@@ -82,6 +75,7 @@ class YOLOFaceDetectionONNX {
       maintainAspectRatio: true,
       quality: FilterQuality.medium,
     );
+
     // final input = [inputImageList];
     final inputShape = [
       1,
@@ -93,7 +87,7 @@ class YOLOFaceDetectionONNX {
       inputImageList,
       inputShape,
     );
-    final inputs = {'data': inputOrt};
+    final inputs = {'input': inputOrt};
     stopwatchDecoding.stop();
     _logger.info(
       'Image decoding and preprocessing is finished, in ${stopwatchDecoding.elapsedMilliseconds}ms',
@@ -120,23 +114,29 @@ class YOLOFaceDetectionONNX {
 
     _logger.info('outputs: $outputs');
 
-    // Get output tensors
-    final stride_8 = outputs?[0]?.value
-        as List<List<List<List<List<double>>>>>; // [1, 3, 60, 80, 16]
-    final stride_16 = outputs?[1]?.value
-        as List<List<List<List<List<double>>>>>; // [1, 3, 30, 40, 16]
-    final stride_32 = outputs?[2]?.value
-        as List<List<List<List<List<double>>>>>; // [1, 3, 15, 20, 16]
+    // // Get output tensors
+    final nestedResults =
+        outputs?[0]?.value as List<List<List<double>>>; // [1, 25200, 16]
+    final firstResults = nestedResults[0]; // [25200, 16]
+
+    // final rawScores = <double>[];
+    // for (final result in firstResults) {
+    //   rawScores.add(result[4]);
+    // }
+    // final rawScoresCopy = List<double>.from(rawScores);
+    // rawScoresCopy.sort();
+    // _logger.info('rawScores minimum: ${rawScoresCopy.first}');
+    // _logger.info('rawScores maximum: ${rawScoresCopy.last}');
+
+    var relativeDetections = yoloOnnxFilterExtractDetections(
+      options: _faceOptions,
+      results: firstResults,
+    );
+
+    // Release outputs
     outputs?.forEach((element) {
       element?.release();
     });
-
-    var relativeDetections = filterExtractDetectionsYOLOonnx(
-      options: _faceOptions,
-      stride32: stride_32[0],
-      stride16: stride_16[0],
-      stride8: stride_8[0],
-    );
 
     // Account for the fact that the aspect ratio was maintained
     for (final faceDetection in relativeDetections) {
@@ -149,6 +149,7 @@ class YOLOFaceDetectionONNX {
       );
     }
 
+    // Non-maximum suppression to remove duplicate detections
     relativeDetections = naiveNonMaxSuppression(
       detections: relativeDetections,
       iouThreshold: _faceOptions.iouThreshold,

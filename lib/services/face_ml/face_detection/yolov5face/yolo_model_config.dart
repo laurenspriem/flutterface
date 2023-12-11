@@ -11,31 +11,11 @@ class YOLOModelConfig {
   });
 }
 
-final YOLOModelConfig yoloV5FaceNtflite = YOLOModelConfig(
-  modelPath: ModelFile.yoloV5FaceN256x320tflite,
-  faceOptions: FaceDetectionOptionsYOLO(
-    minScoreSigmoidThreshold: 0.25,
-    iouThreshold: 0.3,
-    inputWidth: 320,
-    inputHeight: 256,
-  ),
-);
-
-final YOLOModelConfig yoloV5FaceS256x320tflite = YOLOModelConfig(
-  modelPath: ModelFile.yoloV5FaceS256x320tflite,
-  faceOptions: FaceDetectionOptionsYOLO(
-    minScoreSigmoidThreshold: 0.25,
-    iouThreshold: 0.3,
-    inputWidth: 320,
-    inputHeight: 256,
-  ),
-);
-
 final YOLOModelConfig yoloV5FaceS480x640tflite = YOLOModelConfig(
   modelPath: ModelFile.yoloV5FaceS480x640tflite,
   faceOptions: FaceDetectionOptionsYOLO(
-    minScoreSigmoidThreshold: 0.25,
-    iouThreshold: 0.3,
+    minScoreSigmoidThreshold: 0.6,
+    iouThreshold: 0.4,
     inputWidth: 640,
     inputHeight: 480,
   ),
@@ -44,9 +24,29 @@ final YOLOModelConfig yoloV5FaceS480x640tflite = YOLOModelConfig(
 final YOLOModelConfig yoloV5FaceS480x640onnx = YOLOModelConfig(
   modelPath: ModelFile.yoloV5FaceS480x640onnx,
   faceOptions: FaceDetectionOptionsYOLO(
-    minScoreSigmoidThreshold: 0.25,
-    iouThreshold: 0.3,
+    minScoreSigmoidThreshold: 0.6,
+    iouThreshold: 0.4,
     inputWidth: 640,
     inputHeight: 480,
+  ),
+);
+
+final YOLOModelConfig yoloV5FaceS640x640onnx = YOLOModelConfig(
+  modelPath: ModelFile.yoloV5FaceS640x640onnx,
+  faceOptions: FaceDetectionOptionsYOLO(
+    minScoreSigmoidThreshold: 0.6,
+    iouThreshold: 0.4,
+    inputWidth: 640,
+    inputHeight: 640,
+  ),
+);
+
+final YOLOModelConfig yoloV5FaceN640x640onnx = YOLOModelConfig(
+  modelPath: ModelFile.yoloV5FaceN640x640onnx,
+  faceOptions: FaceDetectionOptionsYOLO(
+    minScoreSigmoidThreshold: 0.6,
+    iouThreshold: 0.4,
+    inputWidth: 640,
+    inputHeight: 640,
   ),
 );

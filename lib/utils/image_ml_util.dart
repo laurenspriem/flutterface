@@ -125,13 +125,15 @@ Float32List createFloat32ListFromImageChannelsFirst(
   final buffer = Float32List.view(convertedBytes.buffer);
 
   int pixelIndex = 0;
-
-  for (var i = 0; i < image.height; i++) {
-    for (var j = 0; j < image.width; j++) {
-      final pixel = readPixelColor(image, byteDataRgba, j, i);
-      buffer[pixelIndex++] = normFunction(pixel.red);
-      buffer[pixelIndex++] = normFunction(pixel.green);
-      buffer[pixelIndex++] = normFunction(pixel.blue);
+  final int channelOffsetGreen = image.height * image.width;
+  final int channelOffsetBlue = 2 * image.height * image.width;
+  for (var h = 0; h < image.height; h++) {
+    for (var w = 0; w < image.width; w++) {
+      final pixel = readPixelColor(image, byteDataRgba, w, h);
+      buffer[pixelIndex] = normFunction(pixel.red);
+      buffer[pixelIndex + channelOffsetGreen] = normFunction(pixel.green);
+      buffer[pixelIndex + channelOffsetBlue] = normFunction(pixel.blue);
+      pixelIndex++;
     }
   }
   return convertedBytes.buffer.asFloat32List();
@@ -294,6 +296,14 @@ Future<(Image, Size)> resizeImage(
       const Offset(0, 0),
       Offset(width.toDouble(), height.toDouble()),
     ),
+  );
+  // Pre-fill the canvas with RGB color (114, 114, 114)
+  canvas.drawRect(
+    Rect.fromPoints(
+      const Offset(0, 0),
+      Offset(width.toDouble(), height.toDouble()),
+    ),
+    Paint()..color = const Color.fromARGB(255, 114, 114, 114),
   );
 
   double scaleW = width / image.width;

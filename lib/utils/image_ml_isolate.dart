@@ -323,7 +323,7 @@ class ImageMlIsolate {
   }
 
   /// Uses [preprocessImageToFloat32ChannelsFirst] inside the isolate.
-  Future<(Float32List, Size, Size)> preprocessImageYOLOonnx(
+  Future<(Float32List, Size, Size)> preprocessImageYoloOnnx(
     Uint8List imageData, {
     required bool normalize,
     required int requiredWidth,

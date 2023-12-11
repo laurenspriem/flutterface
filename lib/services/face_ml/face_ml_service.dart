@@ -23,7 +23,7 @@ class FaceMlService {
   Future<void> init() async {
     _logger.info('init called');
     try {
-      await YOLOFaceDetectionONNX.instance.init();
+      await YoloOnnxFaceDetection.instance.init();
     } catch (e, s) {
       _logger.severe('Could not initialize YOLO', e, s);
     }
@@ -51,7 +51,7 @@ class FaceMlService {
     try {
       // Get the bounding boxes of the faces
       final List<FaceDetectionRelative> faces =
-          await YOLOFaceDetectionONNX.instance.predict(imageData);
+          await YoloOnnxFaceDetection.instance.predict(imageData);
 
       return faces;
     } on YOLOInterpreterInitializationException {
