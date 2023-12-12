@@ -60,9 +60,8 @@ class FaceDetectionRelative extends Detection {
   List<double> get leftEye => allKeypoints[0];
   List<double> get rightEye => allKeypoints[1];
   List<double> get nose => allKeypoints[2];
-  List<double> get mouth => allKeypoints[3];
-  List<double> get leftEar => allKeypoints[4];
-  List<double> get rightEar => allKeypoints[5];
+  List<double> get leftMouth => allKeypoints[3];
+  List<double> get rightMouth => allKeypoints[4];
 
   FaceDetectionRelative({
     required double score,
@@ -70,12 +69,12 @@ class FaceDetectionRelative extends Detection {
     required List<List<double>> allKeypoints,
   })  : assert(
           box.every((e) => e >= -0.1 && e <= 1.1),
-          "Bounding box values must be in the range [0, 1], with only a small margin of error allowed.",
+          'Bounding box values must be in the range [0, 1], with only a small margin of error allowed.',
         ),
         assert(
           allKeypoints
               .every((sublist) => sublist.every((e) => e >= -0.1 && e <= 1.1)),
-          "All keypoints must be in the range [0, 1], with only a small margin of error allowed.",
+          'All keypoints must be in the range [0, 1], with only a small margin of error allowed.',
         ),
         box = List<double>.from(box.map((e) => e.clamp(0.0, 1.0))),
         allKeypoints = allKeypoints
@@ -96,7 +95,6 @@ class FaceDetectionRelative extends Detection {
         [0, 0],
         [0, 0],
         [0, 0],
-        [0, 0],
       ],
     );
   }
@@ -107,7 +105,6 @@ class FaceDetectionRelative extends Detection {
   FaceDetectionRelative.defaultInitialization()
       : box = const <double>[0, 0, 0, 0],
         allKeypoints = const <List<double>>[
-          [0, 0],
           [0, 0],
           [0, 0],
           [0, 0],
@@ -311,7 +308,7 @@ class FaceDetectionRelative extends Detection {
 
   @override
   String toString() {
-    return 'FaceDetectionRelative( with relative coordinates: \n score: $score \n Box: xMinBox: $xMinBox, yMinBox: $yMinBox, xMaxBox: $xMaxBox, yMaxBox: $yMaxBox, \n Keypoints: leftEye: $leftEye, rightEye: $rightEye, nose: $nose, mouth: $mouth, leftEar: $leftEar, rightEar: $rightEar \n )';
+    return 'FaceDetectionRelative( with relative coordinates: \n score: $score \n Box: xMinBox: $xMinBox, yMinBox: $yMinBox, xMaxBox: $xMaxBox, yMaxBox: $yMaxBox, \n Keypoints: leftEye: $leftEye, rightEye: $rightEye, nose: $nose, leftMouth: $leftMouth, rightMouth: $rightMouth \n )';
   }
 
   Map<String, dynamic> toJson() {
@@ -364,9 +361,8 @@ class FaceDetectionAbsolute extends Detection {
   List<double> get leftEye => allKeypoints[0];
   List<double> get rightEye => allKeypoints[1];
   List<double> get nose => allKeypoints[2];
-  List<double> get mouth => allKeypoints[3];
-  List<double> get leftEar => allKeypoints[4];
-  List<double> get rightEar => allKeypoints[5];
+  List<double> get leftMouth => allKeypoints[3];
+  List<double> get rightMouth => allKeypoints[4];
 
   FaceDetectionAbsolute({
     required double score,
@@ -384,7 +380,6 @@ class FaceDetectionAbsolute extends Detection {
         [0, 0],
         [0, 0],
         [0, 0],
-        [0, 0],
       ],
     );
   }
@@ -397,13 +392,12 @@ class FaceDetectionAbsolute extends Detection {
           [0, 0],
           [0, 0],
           [0, 0],
-          [0, 0],
         ],
         super.empty();
 
   @override
   String toString() {
-    return 'FaceDetectionAbsolute( with absolute coordinates: \n score: $score \n Box: xMinBox: $xMinBox, yMinBox: $yMinBox, xMaxBox: $xMaxBox, yMaxBox: $yMaxBox, \n Keypoints: leftEye: $leftEye, rightEye: $rightEye, nose: $nose, mouth: $mouth, leftEar: $leftEar, rightEar: $rightEar \n )';
+    return 'FaceDetectionAbsolute( with absolute coordinates: \n score: $score \n Box: xMinBox: $xMinBox, yMinBox: $yMinBox, xMaxBox: $xMaxBox, yMaxBox: $yMaxBox, \n Keypoints: leftEye: $leftEye, rightEye: $rightEye, nose: $nose, leftMouth: $leftMouth, rightMouth: $rightMouth \n )';
   }
 
   Map<String, dynamic> toJson() {

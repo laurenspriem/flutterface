@@ -657,7 +657,7 @@ Future<(List<Num3DInputMatrix>, List<AlignmentResult>)>
   );
 
   final List<List<List<double>>> faceLandmarks =
-      absoluteFaces.map((face) => face.allKeypoints.sublist(0, 4)).toList();
+      absoluteFaces.map((face) => face.allKeypoints).toList();
 
   final alignedImages = <Num3DInputMatrix>[];
   final alignmentResults = <AlignmentResult>[];

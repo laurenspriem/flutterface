@@ -368,7 +368,7 @@ class ImageMlIsolate {
     List<FaceDetectionAbsolute> faces,
   ) async {
     final faceLandmarks =
-        faces.map((face) => face.allKeypoints.sublist(0, 4)).toList();
+        faces.map((face) => face.allKeypoints).toList();
     return await _runInIsolate(
       (
         ImageOperation.preprocessFaceAlign,
