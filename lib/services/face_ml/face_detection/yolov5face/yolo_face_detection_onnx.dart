@@ -1,4 +1,4 @@
-import 'dart:typed_data' show Uint8List;
+import 'dart:typed_data' show Float32List, Uint8List;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -33,7 +33,7 @@ class YoloOnnxFaceDetection {
   ///
   /// config options: yoloV5FaceN //
   static final instance = YoloOnnxFaceDetection._privateConstructor(
-    config: yoloV5FaceS640x640onnx,
+    config: yoloV5FaceS640x640DynamicBatchonnx,
   );
   factory YoloOnnxFaceDetection() {
     OrtEnv.instance.init();
@@ -146,6 +146,146 @@ class YoloOnnxFaceDetection {
           _faceOptions.inputHeight.toDouble(),
         ),
         newSize,
+      );
+    }
+
+    // Non-maximum suppression to remove duplicate detections
+    relativeDetections = naiveNonMaxSuppression(
+      detections: relativeDetections,
+      iouThreshold: _faceOptions.iouThreshold,
+    );
+
+    if (relativeDetections.isEmpty) {
+      _logger.info('No face detected');
+      return <FaceDetectionRelative>[];
+    }
+
+    stopwatch.stop();
+    _logger.info(
+      'predict() face detection executed in ${stopwatch.elapsedMilliseconds}ms',
+    );
+
+    return relativeDetections;
+  }
+
+  /// Detects faces in the given image data.
+  /// This method is optimized for batch processing.
+  /// 
+  /// `imageDataList`: The image data to analyze.
+  /// 
+  /// WARNING: Currently this method only returns the detections for the first image in the batch.
+  /// Change the function to output all detection before actually using it in production.
+  Future<List<FaceDetectionRelative>> predictBatch(
+    List<Uint8List> imageDataList,
+  ) async {
+    assert(_isInitialized && _session != null && _sessionOptions != null);
+
+    final stopwatch = Stopwatch()..start();
+
+    final stopwatchDecoding = Stopwatch()..start();
+    final List<Float32List> inputImageDataLists = [];
+    final List<(Size, Size)> originalAndNewSizeList = [];
+    int concatenatedImageInputsLength = 0;
+    for (final imageData in imageDataList) {
+      final (inputImageList, originalSize, newSize) =
+          await ImageMlIsolate.instance.preprocessImageYoloOnnx(
+        imageData,
+        normalize: true,
+        requiredWidth: _faceOptions.inputWidth,
+        requiredHeight: _faceOptions.inputHeight,
+        maintainAspectRatio: true,
+        quality: FilterQuality.medium,
+      );
+      inputImageDataLists.add(inputImageList);
+      originalAndNewSizeList.add((originalSize, newSize));
+      concatenatedImageInputsLength += inputImageList.length;
+    }
+
+    final inputImageList = Float32List(concatenatedImageInputsLength);
+
+    int offset = 0;
+    for (int i = 0; i < inputImageDataLists.length; i++) {
+      final inputImageData = inputImageDataLists[i];
+      inputImageList.setRange(
+        offset,
+        offset + inputImageData.length,
+        inputImageData,
+      );
+      offset += inputImageData.length;
+    }
+
+    // final input = [inputImageList];
+    final inputShape = [
+      inputImageDataLists.length,
+      3,
+      _faceOptions.inputHeight,
+      _faceOptions.inputWidth,
+    ];
+    final inputOrt = OrtValueTensor.createTensorWithDataList(
+      inputImageList,
+      inputShape,
+    );
+    final inputs = {'input': inputOrt};
+    stopwatchDecoding.stop();
+    _logger.info(
+      'Image decoding and preprocessing is finished, in ${stopwatchDecoding.elapsedMilliseconds}ms',
+    );
+    // _logger.info('original size: $originalSize \n new size: $newSize');
+
+    _logger.info('interpreter.run is called');
+    // Run inference
+    final stopwatchInterpreter = Stopwatch()..start();
+    List<OrtValue?>? outputs;
+    try {
+      final runOptions = OrtRunOptions();
+      outputs = await _session?.runAsync(runOptions, inputs);
+      inputOrt.release();
+      runOptions.release();
+    } catch (e, s) {
+      _logger.severe('Error while running inference: $e \n $s');
+      throw YOLOInterpreterRunException();
+    }
+    stopwatchInterpreter.stop();
+    _logger.info(
+      'interpreter.run is finished, in ${stopwatchInterpreter.elapsedMilliseconds} ms, or ${stopwatchInterpreter.elapsedMilliseconds / inputImageDataLists.length} ms per image',
+    );
+
+    _logger.info('outputs: $outputs');
+
+    const int imageOutputToUse = 0;
+
+    // // Get output tensors
+    final nestedResults =
+        outputs?[0]?.value as List<List<List<double>>>; // [b, 25200, 16]
+    final selectedResults = nestedResults[imageOutputToUse]; // [25200, 16]
+
+    // final rawScores = <double>[];
+    // for (final result in firstResults) {
+    //   rawScores.add(result[4]);
+    // }
+    // final rawScoresCopy = List<double>.from(rawScores);
+    // rawScoresCopy.sort();
+    // _logger.info('rawScores minimum: ${rawScoresCopy.first}');
+    // _logger.info('rawScores maximum: ${rawScoresCopy.last}');
+
+    var relativeDetections = yoloOnnxFilterExtractDetections(
+      options: _faceOptions,
+      results: selectedResults,
+    );
+
+    // Release outputs
+    outputs?.forEach((element) {
+      element?.release();
+    });
+
+    // Account for the fact that the aspect ratio was maintained
+    for (final faceDetection in relativeDetections) {
+      faceDetection.correctForMaintainedAspectRatio(
+        Size(
+          _faceOptions.inputWidth.toDouble(),
+          _faceOptions.inputHeight.toDouble(),
+        ),
+        originalAndNewSizeList[imageOutputToUse].$2,
       );
     }
 
