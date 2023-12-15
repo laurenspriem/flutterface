@@ -32,6 +32,7 @@ dependencies:
   flutter_isolate: ^2.0.4
   crypto: ^3.0.3
   onnxruntime: ^1.1.0
+  path_provider: ^2.1.1
   # vector_math: ^2.1.4
   # matrix2d: ^1.0.4
   

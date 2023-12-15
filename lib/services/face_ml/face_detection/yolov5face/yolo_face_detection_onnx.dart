@@ -8,6 +8,7 @@ import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face
 import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face_detection_options.dart';
 import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_filter_extract_detections.dart';
 import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_model_config.dart';
+import 'package:flutterface/utils/debug_ml_export_data.dart';
 import 'package:flutterface/utils/image_ml_isolate.dart';
 import 'package:logging/logging.dart';
 import 'package:onnxruntime/onnxruntime.dart';
@@ -76,7 +77,13 @@ class YoloOnnxFaceDetection {
       quality: FilterQuality.medium,
     );
 
-    // final input = [inputImageList];
+    // // final input = [inputImageList];
+    // await encodeAndSaveData(
+    //   inputImageList,
+    //   'inputList',
+    //   'YoloOnnxFaceDetection',
+    // );
+
     final inputShape = [
       1,
       3,
@@ -119,6 +126,12 @@ class YoloOnnxFaceDetection {
         outputs?[0]?.value as List<List<List<double>>>; // [1, 25200, 16]
     final firstResults = nestedResults[0]; // [25200, 16]
 
+    // await encodeAndSaveData(
+    //   firstResults,
+    //   'outputList',
+    //   'YoloOnnxFaceDetection',
+    // );
+
     // final rawScores = <double>[];
     // for (final result in firstResults) {
     //   rawScores.add(result[4]);
@@ -160,6 +173,22 @@ class YoloOnnxFaceDetection {
       return <FaceDetectionRelative>[];
     }
 
+    // await encodeAndSaveData(
+    //   relativeDetections,
+    //   'relativeDetections',
+    //   'YoloOnnxFaceDetection',
+    // );
+    // final absoluteDetections = relativeToAbsoluteDetections(
+    //   relativeDetections: relativeDetections,
+    //   imageWidth: originalSize.width.toInt(),
+    //   imageHeight: originalSize.height.toInt(),
+    // );
+    // await encodeAndSaveData(
+    //   absoluteDetections,
+    //   'absoluteDetections',
+    //   'YoloOnnxFaceDetection',
+    // );
+
     stopwatch.stop();
     _logger.info(
       'predict() face detection executed in ${stopwatch.elapsedMilliseconds}ms',
@@ -170,9 +199,9 @@ class YoloOnnxFaceDetection {
 
   /// Detects faces in the given image data.
   /// This method is optimized for batch processing.
-  /// 
+  ///
   /// `imageDataList`: The image data to analyze.
-  /// 
+  ///
   /// WARNING: Currently this method only returns the detections for the first image in the batch.
   /// Change the function to output all detection before actually using it in production.
   Future<List<FaceDetectionRelative>> predictBatch(
