@@ -52,6 +52,25 @@ class FacePainter extends CustomPainter {
           keypointPaint,
         );
       }
+
+      // Draw score
+      final TextPainter textPainter = TextPainter(
+        text: TextSpan(
+          text: face.score.toStringAsFixed(3),
+          style: const TextStyle(
+            color: Colors.yellow,
+            fontSize: 10.0,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textAlign: TextAlign.center,
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      final double textHeight = textPainter.height;
+      final double textX = face.xMinBox.toDouble() * scale;
+      final double textY = face.yMinBox.toDouble() * scale - textHeight - 4.0;
+      textPainter.paint(canvas, Offset(textX, textY));
     }
   }
 
