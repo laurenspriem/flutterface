@@ -28,4 +28,9 @@ class FaceDetectionOptionsYOLO {
     this.flipVertically = false,
   }) : inverseSigmoidMinScoreThreshold =
             math.log(minScoreSigmoidThreshold / (1 - minScoreSigmoidThreshold));
+
+  @override
+  String toString() {
+    return 'FaceDetectionOptionsYOLO{minScoreSigmoidThreshold: $minScoreSigmoidThreshold, iouThreshold: $iouThreshold, inputWidth: $inputWidth, inputHeight: $inputHeight, numCoords: $numCoords, numKeypoints: $numKeypoints, numValuesPerKeypoint: $numValuesPerKeypoint, maxNumFaces: $maxNumFaces, scoreClippingThresh: $scoreClippingThresh, inverseSigmoidMinScoreThreshold: $inverseSigmoidMinScoreThreshold, useSigmoidScore: $useSigmoidScore, flipVertically: $flipVertically}';
+  }
 }

@@ -8,7 +8,7 @@ import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face
 import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face_detection_options.dart';
 import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_filter_extract_detections.dart';
 import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_model_config.dart';
-import 'package:flutterface/utils/debug_ml_export_data.dart';
+// import 'package:flutterface/utils/debug_ml_export_data.dart';
 import 'package:flutterface/utils/image_ml_isolate.dart';
 import 'package:logging/logging.dart';
 import 'package:onnxruntime/onnxruntime.dart';
@@ -342,6 +342,7 @@ class YoloOnnxFaceDetection {
     _logger.info('loadModel is called');
 
     _faceOptions = config.faceOptions;
+    _logger.info('faceOptions: $_faceOptions');
 
     try {
       OrtEnv.instance.init();
