@@ -1,11 +1,14 @@
 # FlutterFace
 
-A basic demo app for running face recognition locally on your phone using [Flutter](https://flutter.dev) and [TensorFlow Lite](https://www.tensorflow.org/lite). 
-This is possible with the use of the [tflite_flutter](https://pub.dev/packages/tflite_flutter) plugin. 
+A basic demo app for running face recognition locally on your phone using [Flutter](https://flutter.dev), [TensorFlow Lite](https://www.tensorflow.org/lite) and [ONNX Runtime](https://onnxruntime.ai). 
+This is possible with the use of the [tflite_flutter](https://pub.dev/packages/tflite_flutter) and [onnxruntime](https://pub.dev/packages/onnxruntime) plugins. 
 
-We use [BlazeFace](https://arxiv.org/abs/1907.05047) for face detection and [MobileFaceNet](https://arxiv.org/abs/1804.07573) for creating embeddings.
+We use [YOLOv5Face](https://arxiv.org/abs/2105.12931) for face detection and [MobileFaceNet](https://arxiv.org/abs/1804.07573) for creating embeddings.
 
 
-## Credits
+## 🧑‍💻 Running from source
 
-- Reused some parts of the [FlutterWithMediaPipe](https://github.com/JaeHeee/FlutterWithMediaPipe) (and one [fork](https://github.com/lcw99/FlutterWithMediaPipe)) project for the face detection part. [This example](https://github.com/tensorflow/flutter-tflite/blob/main/example/image_classification_mobilenet/lib/main.dart) also helped.
+1. [Install Flutter v3.13.4](https://flutter.dev/docs/get-started/install)
+2. Clone this repository with `git clone git@github.com:laurenspriem/flutterface.git`
+3. Fix dependencies using `flutter pub get`
+4. Attach mobile device and run `flutter run`
