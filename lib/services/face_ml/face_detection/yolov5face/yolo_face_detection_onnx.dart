@@ -101,23 +101,30 @@ class YoloOnnxFaceDetection {
     );
     _logger.info('original size: $originalSize \n new size: $newSize');
 
-    _logger.info('interpreter.run is called');
-    // Run inference
-    final stopwatchInterpreter = Stopwatch()..start();
+    const interpreterTestSpeedSampleSize = 30;
+    final inferenceTimes = List.filled(interpreterTestSpeedSampleSize, 0);
     List<OrtValue?>? outputs;
-    try {
-      final runOptions = OrtRunOptions();
-      outputs = await _session?.runAsync(runOptions, inputs);
-      inputOrt.release();
-      runOptions.release();
-    } catch (e, s) {
-      _logger.severe('Error while running inference: $e \n $s');
-      throw YOLOInterpreterRunException();
+    for (var i = 0; i < interpreterTestSpeedSampleSize; i++) {
+      _logger.info('interpreter.run is called');
+      // Run inference
+      final stopwatchInterpreter = Stopwatch()..start();
+      // List<OrtValue?>? outputs;
+      try {
+        final runOptions = OrtRunOptions();
+        outputs = await _session?.runAsync(runOptions, inputs);
+        // inputOrt.release();
+        // runOptions.release();
+      } catch (e, s) {
+        _logger.severe('Error while running inference: $e \n $s');
+        throw YOLOInterpreterRunException();
+      }
+      stopwatchInterpreter.stop();
+      _logger.info(
+        'interpreter.run is finished, in ${stopwatchInterpreter.elapsedMilliseconds} ms',
+      );
+      inferenceTimes[i] = stopwatchInterpreter.elapsedMilliseconds;
     }
-    stopwatchInterpreter.stop();
-    _logger.info(
-      'interpreter.run is finished, in ${stopwatchInterpreter.elapsedMilliseconds} ms',
-    );
+    _logger.info('inference times: $inferenceTimes');
 
     _logger.info('outputs: $outputs');
 
@@ -147,9 +154,9 @@ class YoloOnnxFaceDetection {
     );
 
     // Release outputs
-    outputs?.forEach((element) {
-      element?.release();
-    });
+    // outputs?.forEach((element) {
+    //   element?.release();
+    // });
 
     // Account for the fact that the aspect ratio was maintained
     for (final faceDetection in relativeDetections) {

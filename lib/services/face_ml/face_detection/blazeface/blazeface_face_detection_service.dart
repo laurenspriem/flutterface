@@ -81,19 +81,26 @@ class BlazeFaceFaceDetection {
       1: outputScores,
     };
 
-    _logger.info('interpreter.run is called');
-    // Run inference
-    final stopwatchInterpreter = Stopwatch()..start();
-    try {
-      await _isolateInterpreter!.runForMultipleInputs([input], outputs);
-    } catch (e, s) {
-      _logger.severe('Error while running inference: $e \n $s');
-      throw BlazeFaceInterpreterRunException();
+    const interpreterTestSpeedSampleSize = 30;
+    final inferenceTimes = List.filled(interpreterTestSpeedSampleSize, 0);
+    for (var i = 0; i < interpreterTestSpeedSampleSize; i++) {
+
+      _logger.info('interpreter.run is called');
+      // Run inference
+      final stopwatchInterpreter = Stopwatch()..start();
+      try {
+        await _isolateInterpreter!.runForMultipleInputs([input], outputs);
+      } catch (e, s) {
+        _logger.severe('Error while running inference: $e \n $s');
+        throw BlazeFaceInterpreterRunException();
+      }
+      stopwatchInterpreter.stop();
+      _logger.info(
+        'interpreter.run is finished, in ${stopwatchInterpreter.elapsedMilliseconds} ms',
+      );
+      inferenceTimes[i] = stopwatchInterpreter.elapsedMilliseconds;
     }
-    stopwatchInterpreter.stop();
-    _logger.info(
-      'interpreter.run is finished, in ${stopwatchInterpreter.elapsedMilliseconds} ms',
-    );
+    _logger.info('inference times: $inferenceTimes');
 
     // Get output tensors
     final rawBoxes = outputs[0]![0]; // Nested List of shape [896, 16]
