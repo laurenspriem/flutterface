@@ -182,11 +182,14 @@ class _HomePageState extends State<HomePage> {
       isPredicting = true;
     });
 
-    faceEmbeddingResult = await FaceMlService.instance.embedSingleFace(
+    final (faceEmbeddingResultLocal, isBlur, blurValue) =
+        await FaceMlService.instance.embedSingleFace(
       imageOriginalData!,
       faceDetectionResultsRelative[showingFaceCounter],
     );
-    print('Embedding: $faceEmbeddingResult');
+    faceEmbeddingResult = faceEmbeddingResultLocal;
+    devtools.log('Blur detected: $isBlur, blur value: $blurValue');
+    // devtools.log('Embedding: $faceEmbeddingResult');
 
     setState(() {
       isPredicting = false;

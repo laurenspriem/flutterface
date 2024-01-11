@@ -133,7 +133,7 @@ class FaceMlService {
   /// Returns the face embedding as a list of doubles.
   ///
   /// Throws `CouldNotInitializeFaceEmbeddor`, `CouldNotRunFaceEmbeddor` or `GeneralFaceMlException` if the face embedding fails.
-  Future<List<double>> embedSingleFace(
+  Future<(List<double>, bool, double)> embedSingleFace(
     Uint8List imageData,
     FaceDetectionRelative face,
   ) async {
@@ -142,12 +142,12 @@ class FaceMlService {
       await FaceEmbedding.instance.init();
 
       // Get the embedding of the face
-      final List<double> embedding =
+      final (List<double> embedding, bool isBlur, double blurValue) =
           await FaceEmbedding.instance.predict(imageData, face);
 
-      log('Embedding: $embedding');
+      // log('Embedding: $embedding');
 
-      return embedding;
+      return (embedding, isBlur, blurValue);
     } on MobileFaceNetInterpreterInitializationException {
       throw CouldNotInitializeFaceEmbeddor();
     } on MobileFaceNetInterpreterRunException {

@@ -72,14 +72,14 @@ class FaceEmbedding {
   // }
 
   // TODO: Make the predict function asynchronous with use of isolate-interpreter: https://github.com/tensorflow/flutter-tflite/issues/52
-  Future<List<double>> predict(
+  Future<(List<double>, bool, double)> predict(
     Uint8List imageData,
     FaceDetectionRelative face,
   ) async {
     assert(_interpreter != null && _isolateInterpreter != null);
 
     final stopwatchDecoding = Stopwatch()..start();
-    final (inputImageMatrix, alignmentResults) =
+    final (inputImageMatrix, alignmentResults, isBlur, blurValue) =
         await ImageMlIsolate.instance.preprocessMobileFaceNet(
       imageData,
       [face],
@@ -128,7 +128,7 @@ class FaceEmbedding {
       'Min of embedding: ${embedding.reduce(math.min)}',
     );
 
-    return embedding;
+    return (embedding, isBlur[0], blurValue[0]);
   }
 
   Future<void> _loadModel() async {
