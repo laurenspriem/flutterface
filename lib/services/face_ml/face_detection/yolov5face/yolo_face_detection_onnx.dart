@@ -107,7 +107,7 @@ class YoloOnnxFaceDetection {
     List<OrtValue?>? outputs;
     try {
       final runOptions = OrtRunOptions();
-      outputs = await _session?.runAsync(runOptions, inputs);
+      outputs =  _session?.run(runOptions, inputs);
       inputOrt.release();
       runOptions.release();
     } catch (e, s) {
@@ -267,7 +267,7 @@ class YoloOnnxFaceDetection {
     List<OrtValue?>? outputs;
     try {
       final runOptions = OrtRunOptions();
-      outputs = await _session?.runAsync(runOptions, inputs);
+      outputs = _session?.run(runOptions, inputs);
       inputOrt.release();
       runOptions.release();
     } catch (e, s) {
