@@ -1,12 +1,12 @@
 name: flutterface
 description: A new Flutter project.
 
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -31,12 +31,13 @@ dependencies:
   synchronized: ^3.1.0
   flutter_isolate: ^2.0.4
   crypto: ^3.0.3
-  onnxruntime: ^1.1.0
   path_provider: ^2.1.1
   # vector_math: ^2.1.4
   # matrix2d: ^1.0.4
-  
-  
+  onnxruntime:
+    git:
+      url: "https://github.com/ente-io/onnxruntime.git"
+      ref: isolates
 
 dev_dependencies:
   flutter_test:
@@ -46,7 +47,6 @@ dev_dependencies:
   test: ^1.24.1
 
 flutter:
-
   uses-material-design: true
 
   assets:
