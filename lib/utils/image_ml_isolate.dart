@@ -18,6 +18,7 @@ enum ImageOperation {
   preprocessYOLOonnx,
   preprocessFaceAlign,
   preprocessMobileFaceNet,
+  preprocessMobileFaceNetOnnx,
   generateFaceThumbnail,
   cropAndPadFace,
 }
@@ -183,6 +184,22 @@ class ImageMlIsolate {
           final facesJson = args['facesJson'] as List<Map<String, dynamic>>;
           final (inputs, alignmentResults, isBlur, blurValue) =
               await preprocessToMobileFaceNetInput(
+            imageData,
+            facesJson,
+          );
+          final List<Map<String, dynamic>> alignmentResultsJson =
+              alignmentResults.map((result) => result.toJson()).toList();
+          sendPort.send({
+            'inputs': inputs,
+            'alignmentResultsJson': alignmentResultsJson,
+            'isBlur': isBlur,
+            'blurValue': blurValue,
+          });
+        case ImageOperation.preprocessMobileFaceNetOnnx:
+          final imageData = args['imageData'] as Uint8List;
+          final facesJson = args['facesJson'] as List<Map<String, dynamic>>;
+          final (inputs, alignmentResults, isBlur, blurValue) =
+              await preprocessToMobileFaceNetFloat32List(
             imageData,
             facesJson,
           );
@@ -404,6 +421,34 @@ class ImageMlIsolate {
       ),
     );
     final inputs = results['inputs'] as List<Num3DInputMatrix>;
+    final alignmentResultsJson =
+        results['alignmentResultsJson'] as List<Map<String, dynamic>>;
+    final isBlur = results['isBlur'] as List<bool>;
+    final blurValue = results['blurValue'] as List<double>;
+    final alignmentResults = alignmentResultsJson.map((json) {
+      return AlignmentResult.fromJson(json);
+    }).toList();
+    return (inputs, alignmentResults, isBlur, blurValue);
+  }
+
+  /// Uses [preprocessToMobileFaceNetFloat32List] inside the isolate.
+  Future<(Float32List, List<AlignmentResult>, List<bool>, List<double>)>
+      preprocessMobileFaceNetOnnx(
+    Uint8List imageData,
+    List<FaceDetectionRelative> faces,
+  ) async {
+    final List<Map<String, dynamic>> facesJson =
+        faces.map((face) => face.toJson()).toList();
+    final Map<String, dynamic> results = await _runInIsolate(
+      (
+        ImageOperation.preprocessMobileFaceNetOnnx,
+        {
+          'imageData': imageData,
+          'facesJson': facesJson,
+        },
+      ),
+    );
+    final inputs = results['inputs'] as Float32List;
     final alignmentResultsJson =
         results['alignmentResultsJson'] as List<Map<String, dynamic>>;
     final isBlur = results['isBlur'] as List<bool>;

@@ -5,6 +5,7 @@ import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face_detection_exceptions.dart';
 import 'package:flutterface/services/face_ml/face_detection/yolov5face/yolo_face_detection_onnx.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_exceptions.dart';
+import 'package:flutterface/services/face_ml/face_embedding/face_embedding_onnx.dart';
 import 'package:flutterface/services/face_ml/face_embedding/face_embedding_service.dart';
 import 'package:flutterface/services/face_ml/face_ml_exceptions.dart';
 import 'package:flutterface/utils/image_ml_isolate.dart';
@@ -33,7 +34,8 @@ class FaceMlService {
       _logger.severe('Could not initialize image ml isolate', e, s);
     }
     try {
-      await FaceEmbedding.instance.init();
+      // await FaceEmbedding.instance.init();
+      await FaceEmbeddingOnnx.instance.init();
     } catch (e, s) {
       _logger.severe('Could not initialize mobilefacenet', e, s);
     }
@@ -138,12 +140,13 @@ class FaceMlService {
     FaceDetectionRelative face,
   ) async {
     try {
-      // Get (and initialize if necessary) the face detector singleton instance
-      await FaceEmbedding.instance.init();
+      // await FaceEmbedding.instance.init();
+      // final (List<double> embedding, bool isBlur, double blurValue) =
+      //     await FaceEmbedding.instance.predict(imageData, face);
 
-      // Get the embedding of the face
+      await FaceEmbeddingOnnx.instance.init();
       final (List<double> embedding, bool isBlur, double blurValue) =
-          await FaceEmbedding.instance.predict(imageData, face);
+          await FaceEmbeddingOnnx.instance.predict(imageData, face);
 
       // log('Embedding: $embedding');
 

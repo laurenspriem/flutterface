@@ -12,7 +12,7 @@ void main() async {
       '[${record.loggerName}]: ${record.level.name}: ${record.time}: ${record.message}',
     );
   });
-  await Computer.shared().turnOn(workersCount: 4);
+  await Computer.shared().turnOn(workersCount: 2);
   runApp(const MyApp());
 }
 
