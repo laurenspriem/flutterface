@@ -38,7 +38,8 @@ dependencies:
     git:
       url: "https://github.com/ente-io/onnxruntime.git"
       ref: isolates
-  computer: ^3.2.1
+  computer:
+    git: "https://github.com/ente-io/computer.git"
 
 dev_dependencies:
   flutter_test:
