@@ -390,7 +390,7 @@ class _HomePageState extends State<HomePage> {
             isAnalyzed
                 ? ElevatedButton.icon(
                     icon: const Icon(Icons.face_retouching_natural),
-                    label: const Text('Align faces (custom)'),
+                    label: const Text('Align faces (bicubic)'),
                     onPressed: alignFaceCustomInterpolation,
                   )
                 : const SizedBox.shrink(),
