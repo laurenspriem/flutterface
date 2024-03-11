@@ -133,7 +133,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void alignFace() async {
+  void alignFaceCustomInterpolation() async {
     if (imageOriginalData == null) {
       showResponseSnackbar(context, 'Please select an image first');
       return;
@@ -154,7 +154,46 @@ class _HomePageState extends State<HomePage> {
     final face = faceDetectionResultsAbsolute[faceFocusCounter];
     try {
       faceAlignedData = await FaceMlService.instance
-          .alignSingleFace(imageOriginalData!, face);
+          .alignSingleFaceCustomInterpolation(imageOriginalData!, face);
+    } catch (e) {
+      devtools.log('Alignment of face failed: $e');
+      return;
+    }
+
+    setState(() {
+      isAligned = true;
+      faceEmbeddingResult = [];
+      embeddingStartIndex = 0;
+      isEmbedded = false;
+      faceAligned = Image.memory(faceAlignedData!);
+      showingFaceCounter = faceFocusCounter;
+      faceFocusCounter =
+          (faceFocusCounter + 1) % faceDetectionResultsAbsolute.length;
+    });
+  }
+
+  void alignFaceCanvasInterpolation() async {
+    if (imageOriginalData == null) {
+      showResponseSnackbar(context, 'Please select an image first');
+      return;
+    }
+    if (!isAnalyzed) {
+      showResponseSnackbar(context, 'Please detect faces first');
+      return;
+    }
+    if (faceDetectionResultsAbsolute.isEmpty) {
+      showResponseSnackbar(context, 'No face detected, nothing to align');
+      return;
+    }
+    if (faceDetectionResultsAbsolute.length == 1 && isAligned) {
+      showResponseSnackbar(context, 'This is the only face found in the image');
+      return;
+    }
+
+    final face = faceDetectionResultsAbsolute[faceFocusCounter];
+    try {
+      faceAlignedData = await FaceMlService.instance
+          .alignSingleFaceCanvasInterpolation(imageOriginalData!, face);
     } catch (e) {
       devtools.log('Alignment of face failed: $e');
       return;
@@ -351,8 +390,15 @@ class _HomePageState extends State<HomePage> {
             isAnalyzed
                 ? ElevatedButton.icon(
                     icon: const Icon(Icons.face_retouching_natural),
-                    label: const Text('Align faces'),
-                    onPressed: alignFace,
+                    label: const Text('Align faces (custom)'),
+                    onPressed: alignFaceCustomInterpolation,
+                  )
+                : const SizedBox.shrink(),
+            isAnalyzed
+                ? ElevatedButton.icon(
+                    icon: const Icon(Icons.face_retouching_natural),
+                    label: const Text('Align faces (canvas)'),
+                    onPressed: alignFaceCanvasInterpolation,
                   )
                 : const SizedBox.shrink(),
             isAligned

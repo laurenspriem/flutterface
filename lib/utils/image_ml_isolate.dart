@@ -16,7 +16,8 @@ enum ImageOperation {
   preprocessBlazeFace,
   preprocessYOLOtflite,
   preprocessYOLOonnx,
-  preprocessFaceAlign,
+  preprocessFaceAlignCustom,
+  preprocessFaceAlignCanvas,
   preprocessMobileFaceNet,
   preprocessMobileFaceNetOnnx,
   generateFaceThumbnail,
@@ -170,7 +171,17 @@ class ImageMlIsolate {
             'newWidth': newSize.width,
             'newHeight': newSize.height,
           });
-        case ImageOperation.preprocessFaceAlign:
+        case ImageOperation.preprocessFaceAlignCustom:
+          final imageData = args['imageData'] as Uint8List;
+          final faceLandmarks =
+              args['faceLandmarks'] as List<List<List<double>>>;
+          final List<Uint8List> result =
+              await preprocessFaceAlignToUint8ListBilinear(
+            imageData,
+            faceLandmarks,
+          );
+          sendPort.send(List.from(result));
+        case ImageOperation.preprocessFaceAlignCanvas:
           final imageData = args['imageData'] as Uint8List;
           final faceLandmarks =
               args['faceLandmarks'] as List<List<List<double>>>;
@@ -380,17 +391,33 @@ class ImageMlIsolate {
   ///
   /// Returns a list of [Uint8List] images, one for each face, in png format.
   ///
-  /// Uses [preprocessFaceAlignToUint8List] inside the isolate.
+  /// Uses [preprocessFaceAlignToUint8ListBilinear] inside the isolate.
   ///
   /// WARNING: For preprocessing for MobileFaceNet, use [preprocessMobileFaceNet] instead!
-  Future<List<Uint8List>> preprocessFaceAlign(
+  Future<List<Uint8List>> preprocessFaceAlignCustom(
     Uint8List imageData,
     List<FaceDetectionAbsolute> faces,
   ) async {
     final faceLandmarks = faces.map((face) => face.allKeypoints).toList();
     return await _runInIsolate(
       (
-        ImageOperation.preprocessFaceAlign,
+        ImageOperation.preprocessFaceAlignCustom,
+        {
+          'imageData': imageData,
+          'faceLandmarks': faceLandmarks,
+        },
+      ),
+    ).then((value) => value.cast<Uint8List>());
+  }
+
+  Future<List<Uint8List>> preprocessFaceAlignCanvas(
+    Uint8List imageData,
+    List<FaceDetectionAbsolute> faces,
+  ) async {
+    final faceLandmarks = faces.map((face) => face.allKeypoints).toList();
+    return await _runInIsolate(
+      (
+        ImageOperation.preprocessFaceAlignCanvas,
         {
           'imageData': imageData,
           'faceLandmarks': faceLandmarks,
@@ -404,8 +431,13 @@ class ImageMlIsolate {
   /// Returns a list of [Num3DInputMatrix] images, one for each face.
   ///
   /// Uses [preprocessToMobileFaceNetInput] inside the isolate.
-  Future<(List<Num3DInputMatrix>, List<AlignmentResult>, List<bool>, List<double>)>
-      preprocessMobileFaceNet(
+  Future<
+      (
+        List<Num3DInputMatrix>,
+        List<AlignmentResult>,
+        List<bool>,
+        List<double>
+      )> preprocessMobileFaceNet(
     Uint8List imageData,
     List<FaceDetectionRelative> faces,
   ) async {

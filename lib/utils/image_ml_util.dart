@@ -3,6 +3,7 @@ import 'dart:math' show min, max;
 import 'dart:typed_data' show ByteData, Float32List, Uint8List;
 import 'dart:ui';
 import 'dart:developer' show log;
+import 'package:image/image.dart' as img;
 
 import 'package:flutter/painting.dart' as paint show decodeImageFromList;
 import 'package:flutterface/models/ml/ml_typedefs.dart';
@@ -317,6 +318,40 @@ Future<Uint8List> encodeImageToUint8List(
   final encodedImage = byteDataPng.buffer.asUint8List();
 
   return encodedImage;
+}
+
+Future<Uint8List> uint8ListRgbaToPng(Uint8List rgbaBytes,
+    {int width = 112, int height = 112}) async {
+  final pictureRecorder = PictureRecorder();
+  final canvas = Canvas(pictureRecorder);
+  final paint = Paint();
+  final img = await ImageDescriptor.raw(
+    await ImmutableBuffer.fromUint8List(rgbaBytes),
+    width: width,
+    height: height,
+    pixelFormat: PixelFormat.rgba8888,
+  ).instantiateCodec();
+  final frameInfo = await img.getNextFrame();
+  canvas.drawImage(frameInfo.image, Offset.zero, paint);
+
+  final picture = pictureRecorder.endRecording();
+  final imgBytes = await picture.toImage(width, height);
+  final byteData = await imgBytes.toByteData(format: ImageByteFormat.png);
+  return byteData!.buffer.asUint8List();
+}
+
+Uint8List uint8ListRgbaToPngImage(Uint8List rgbaImageData,
+    {int width = 112, int height = 112}) {
+  // Create an image from the raw data
+  img.Image image = img.Image.fromBytes(
+      width: width,
+      height: height,
+      bytes: rgbaImageData.buffer,
+      format: img.Format.uint8);
+  // Encode the image to PNG
+  Uint8List pngList = img.encodePng(image);
+  // Convert List<int> to Uint8List
+  return Uint8List.fromList(pngList);
 }
 
 /// Resizes an [Image] object to the specified [width] and [height].
@@ -675,6 +710,61 @@ Future<List<Uint8List>> preprocessFaceAlignToUint8List(
   return alignedImages;
 }
 
+Future<List<Uint8List>> preprocessFaceAlignToUint8ListBilinear(
+  Uint8List imageData,
+  List<List<List<double>>> faceLandmarks, {
+  int width = 112,
+  int height = 112,
+}) async {
+  final alignedImages = <Uint8List>[];
+  final Image image = await decodeImageFromData(imageData);
+  final imageByteData = await getByteDataFromImage(image);
+
+  for (final faceLandmark in faceLandmarks) {
+    final (alignmentResult, correctlyEstimated) =
+        SimilarityTransform.instance.estimate(faceLandmark);
+    if (!correctlyEstimated) {
+      alignedImages.add(Uint8List(0));
+      continue;
+    }
+    // final alignedFaceRgba = await warpAffineToUint8List(
+    //     image, imageByteData, alignmentResult.affineMatrix);
+    // final Uint8List alignedFacePng =
+    //     await uint8ListRgbaToPngImage(alignedFaceRgba);
+    final alignedFacePng = await warpAffineWithImagePackage(
+      image,
+      imageByteData,
+      alignmentResult.affineMatrix,
+    );
+    alignedImages.add(alignedFacePng);
+
+    // final Uint8List alignedImageRGBA = await warpAffineToUint8List(
+    //   image,
+    //   imgByteData,
+    //   alignmentResult.affineMatrix
+    //       .map(
+    //         (row) => row.map((e) {
+    //           if (e != 1.0) {
+    //             return e * 112;
+    //           } else {
+    //             return 1.0;
+    //           }
+    //         }).toList(),
+    //       )
+    //       .toList(),
+    //   width: width,
+    //   height: height,
+    // );
+    // final Image alignedImage =
+    //     await decodeImageFromRgbaBytes(alignedImageRGBA, width, height);
+    // final Uint8List alignedImagePng =
+    //     await encodeImageToUint8List(alignedImage);
+
+    // alignedImages.add(alignedImagePng);
+  }
+  return alignedImages;
+}
+
 /// Preprocesses [imageData] based on [faceLandmarks] to align the faces in the images
 ///
 /// Returns a list of [Num3DInputMatrix] images, one for each face, ready for MobileFaceNet inference
@@ -861,6 +951,115 @@ Future<(Float32List, List<AlignmentResult>, List<bool>, List<double>)>
   return (alignedImagesFloat32List, alignmentResults, isBlurs, blurValues);
 }
 
+Future<Uint8List> warpAffineWithImagePackageToSameWorks(
+  Image inputImage,
+  ByteData imgByteDataRgba,
+  List<List<double>> transformationMatrix, {
+  int width = 112,
+  int height = 112,
+}) async {
+  // final image = img.Image.fromBytes(
+  //   width: inputImage.width,
+  //   height: inputImage.height,
+  //   bytes: imgByteDataRgba.buffer,
+  //   numChannels: 4,
+  // );
+  // return img.encodePng(image);
+  // final Uint8List outputList = Uint8List(4 * width * height);
+  log('image width: ${inputImage.width}, height: ${inputImage.height}, so total pixels: ${inputImage.width * inputImage.height}');
+
+  final img.Image outputImage =
+      img.Image(width: inputImage.width, height: inputImage.height);
+
+  for (int yTrans = 0; yTrans < inputImage.height; ++yTrans) {
+    for (int xTrans = 0; xTrans < inputImage.width; ++xTrans) {
+      final Color pixel =
+          readPixelColor(inputImage, imgByteDataRgba, xTrans, yTrans);
+      final img.ColorRgb8 imagePixel = img.ColorRgb8(
+        pixel.red,
+        pixel.green,
+        pixel.blue,
+      );
+
+      outputImage.setPixel(xTrans, yTrans, imagePixel);
+    }
+  }
+
+  return img.encodeJpg(outputImage);
+}
+
+Future<Uint8List> warpAffineWithImagePackage(
+  Image inputImage,
+  ByteData imgByteDataRgba,
+  List<List<double>> affineMatrix, {
+  int width = 112,
+  int height = 112,
+}) async {
+  // Transforming the transformation matrix for use on 112x112 images
+  final transformationMatrix = affineMatrix
+      .map(
+        (row) => row.map((e) {
+          if (e != 1.0) {
+            return e * 112;
+          } else {
+            return 1.0;
+          }
+        }).toList(),
+      )
+      .toList();
+
+  final img.Image outputImage =
+      img.Image(width: inputImage.width, height: inputImage.height);
+
+  if (width != 112 || height != 112) {
+    throw Exception(
+      'Width and height must be 112, other transformations are not supported yet.',
+    );
+  }
+
+  final A = Matrix.fromList([
+    [transformationMatrix[0][0], transformationMatrix[0][1]],
+    [transformationMatrix[1][0], transformationMatrix[1][1]],
+  ]);
+  final aInverse = A.inverse();
+  // final aInverseMinus = aInverse * -1;
+  final B = Vector.fromList(
+    [transformationMatrix[0][2], transformationMatrix[1][2]],
+  );
+  final b00 = B[0];
+  final b10 = B[1];
+  final a00Prime = aInverse[0][0];
+  final a01Prime = aInverse[0][1];
+  final a10Prime = aInverse[1][0];
+  final a11Prime = aInverse[1][1];
+
+  for (int yTrans = 0; yTrans < height; ++yTrans) {
+    for (int xTrans = 0; xTrans < width; ++xTrans) {
+      // Perform inverse affine transformation (original implementation, intuitive but slow)
+      // final X = aInverse * (Vector.fromList([xTrans, yTrans]) - B);
+      // final X = aInverseMinus * (B - [xTrans, yTrans]);
+      // final xList = X.asFlattenedList;
+      // num xOrigin = xList[0];
+      // num yOrigin = xList[1];
+
+      // Perform inverse affine transformation (fast implementation, less intuitive)
+      final num xOrigin = (xTrans - b00) * a00Prime + (yTrans - b10) * a01Prime;
+      final num yOrigin = (xTrans - b00) * a10Prime + (yTrans - b10) * a11Prime;
+
+      final Color pixel =
+          getPixelBilinear(xOrigin, yOrigin, inputImage, imgByteDataRgba);
+
+      outputImage.setPixel(
+        xTrans,
+        yTrans,
+        img.ColorRgb8(pixel.red, pixel.green, pixel.blue),
+      );
+    }
+  }
+
+  return img.encodeJpg(outputImage);
+}
+
 /// Function to warp an image [imageData] with an affine transformation using the estimated [transformationMatrix].
 ///
 /// Returns the warped image in the specified width and height, in [Uint8List] RGBA format.
@@ -868,8 +1067,8 @@ Future<Uint8List> warpAffineToUint8List(
   Image inputImage,
   ByteData imgByteDataRgba,
   List<List<double>> transformationMatrix, {
-  required int width,
-  required int height,
+  int width = 112,
+  int height = 112,
 }) async {
   final Uint8List outputList = Uint8List(4 * width * height);
 
@@ -1148,6 +1347,45 @@ Future<Uint8List> cropAndPadFaceData(
   );
 
   return await encodeImageToUint8List(facePadded);
+}
+
+Color getPixelBilinear(num fx, num fy, Image image, ByteData byteDataRgba) {
+  // Clamp to image boundaries
+  fx = fx.clamp(0, image.width - 1);
+  fy = fy.clamp(0, image.height - 1);
+
+  // Get the surrounding coordinates and their weights
+  final int x0 = fx.floor();
+  final int x1 = fx.ceil();
+  final int y0 = fy.floor();
+  final int y1 = fy.ceil();
+  final dx = fx - x0;
+  final dy = fy - y0;
+  final dx1 = 1.0 - dx;
+  final dy1 = 1.0 - dy;
+
+  // Get the original pixels
+  final Color pixel1 = readPixelColor(image, byteDataRgba, x0, y0);
+  final Color pixel2 = readPixelColor(image, byteDataRgba, x1, y0);
+  final Color pixel3 = readPixelColor(image, byteDataRgba, x0, y1);
+  final Color pixel4 = readPixelColor(image, byteDataRgba, x1, y1);
+
+  int bilinear(
+    num val1,
+    num val2,
+    num val3,
+    num val4,
+  ) =>
+      (val1 * dx1 * dy1 + val2 * dx * dy1 + val3 * dx1 * dy + val4 * dx * dy)
+          .round();
+
+  // Calculate the weighted sum of pixels
+  final int r = bilinear(pixel1.red, pixel2.red, pixel3.red, pixel4.red);
+  final int g =
+      bilinear(pixel1.green, pixel2.green, pixel3.green, pixel4.green);
+  final int b = bilinear(pixel1.blue, pixel2.blue, pixel3.blue, pixel4.blue);
+
+  return Color.fromRGBO(r, g, b, 1.0);
 }
 
 int bilinearInterpolation(
