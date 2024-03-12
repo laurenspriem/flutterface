@@ -25,8 +25,10 @@ class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
   Image? imageOriginal;
   Image? faceAligned;
+  Image? faceAligned2;
   Uint8List? imageOriginalData;
   Uint8List? faceAlignedData;
+  Uint8List? faceAlignedData2;
   Size imageSize = const Size(0, 0);
   late Size imageDisplaySize;
   int stockImageCounter = 0;
@@ -133,7 +135,49 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void alignFace() async {
+  void alignFaceCustomInterpolation() async {
+    if (imageOriginalData == null) {
+      showResponseSnackbar(context, 'Please select an image first');
+      return;
+    }
+    if (!isAnalyzed) {
+      showResponseSnackbar(context, 'Please detect faces first');
+      return;
+    }
+    if (faceDetectionResultsAbsolute.isEmpty) {
+      showResponseSnackbar(context, 'No face detected, nothing to align');
+      return;
+    }
+    if (faceDetectionResultsAbsolute.length == 1 && isAligned) {
+      showResponseSnackbar(context, 'This is the only face found in the image');
+      return;
+    }
+
+    final face = faceDetectionResultsAbsolute[faceFocusCounter];
+    try {
+      final bothFaces = await FaceMlService.instance
+          .alignSingleFaceCustomInterpolation(imageOriginalData!, face);
+      faceAlignedData = bothFaces[0];
+      faceAlignedData2 = bothFaces[1];
+    } catch (e) {
+      devtools.log('Alignment of face failed: $e');
+      return;
+    }
+
+    setState(() {
+      isAligned = true;
+      faceEmbeddingResult = [];
+      embeddingStartIndex = 0;
+      isEmbedded = false;
+      faceAligned = Image.memory(faceAlignedData!);
+      faceAligned2 = Image.memory(faceAlignedData2!);
+      showingFaceCounter = faceFocusCounter;
+      faceFocusCounter =
+          (faceFocusCounter + 1) % faceDetectionResultsAbsolute.length;
+    });
+  }
+
+  void alignFaceCanvasInterpolation() async {
     if (imageOriginalData == null) {
       showResponseSnackbar(context, 'Please select an image first');
       return;
@@ -154,7 +198,7 @@ class _HomePageState extends State<HomePage> {
     final face = faceDetectionResultsAbsolute[faceFocusCounter];
     try {
       faceAlignedData = await FaceMlService.instance
-          .alignSingleFace(imageOriginalData!, face);
+          .alignSingleFaceCanvasInterpolation(imageOriginalData!, face);
     } catch (e) {
       devtools.log('Alignment of face failed: $e');
       return;
@@ -241,7 +285,33 @@ class _HomePageState extends State<HomePage> {
                   Center(
                     child: imageOriginal != null
                         ? isAligned
-                            ? faceAligned
+                            ? Center(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Column(
+                                      children: [
+                                        faceAligned!,
+                                        const Text(
+                                          'Bilinear',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Column(
+                                      children: [
+                                        faceAligned2!,
+                                        const Text(
+                                          'Bicubic',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              )
                             : Stack(
                                 children: [
                                   imageOriginal!,
@@ -352,7 +422,7 @@ class _HomePageState extends State<HomePage> {
                 ? ElevatedButton.icon(
                     icon: const Icon(Icons.face_retouching_natural),
                     label: const Text('Align faces'),
-                    onPressed: alignFace,
+                    onPressed: alignFaceCustomInterpolation,
                   )
                 : const SizedBox.shrink(),
             isAligned

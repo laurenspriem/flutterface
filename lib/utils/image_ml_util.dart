@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:developer' show log;
 import 'dart:math' show min, max;
 import 'dart:typed_data' show ByteData, Float32List, Uint8List;
 import 'dart:ui';
-import 'dart:developer' show log;
 
 import 'package:flutter/painting.dart' as paint show decodeImageFromList;
 import 'package:flutterface/models/ml/ml_typedefs.dart';
@@ -10,7 +10,7 @@ import 'package:flutterface/services/face_ml/blur_detection_service.dart';
 import 'package:flutterface/services/face_ml/face_alignment/alignment_result.dart';
 import 'package:flutterface/services/face_ml/face_alignment/similarity_transform.dart';
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
-
+import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart';
 import 'package:ml_linalg/linalg.dart';
 
@@ -25,6 +25,7 @@ Color readPixelColor(
 ) {
   if (x < 0 || x >= image.width || y < 0 || y >= image.height) {
     // throw ArgumentError('Invalid pixel coordinates.');
+    log('`readPixelColor`: Invalid pixel coordinates, out of bounds');
     return const Color(0x00000000);
   }
   assert(byteData.lengthInBytes == 4 * image.width * image.height);
@@ -675,6 +676,63 @@ Future<List<Uint8List>> preprocessFaceAlignToUint8List(
   return alignedImages;
 }
 
+Future<List<Uint8List>> preprocessFaceAlignToUint8ListBilinear(
+  Uint8List imageData,
+  List<List<List<double>>> faceLandmarks, {
+  int width = 112,
+  int height = 112,
+  required Function pixelInterpolation,
+}) async {
+  final alignedImages = <Uint8List>[];
+  final Image image = await decodeImageFromData(imageData);
+  final imageByteData = await getByteDataFromImage(image);
+
+  for (final faceLandmark in faceLandmarks) {
+    final (alignmentResult, correctlyEstimated) =
+        SimilarityTransform.instance.estimate(faceLandmark);
+    if (!correctlyEstimated) {
+      alignedImages.add(Uint8List(0));
+      continue;
+    }
+    // final alignedFaceRgba = await warpAffineToUint8List(
+    //     image, imageByteData, alignmentResult.affineMatrix);
+    // final Uint8List alignedFacePng =
+    //     await uint8ListRgbaToPngImage(alignedFaceRgba);
+    final alignedFacePng = await warpAffineWithImagePackage(
+      image,
+      imageByteData,
+      alignmentResult.affineMatrix,
+      pixelInterpolation: pixelInterpolation,
+    );
+    alignedImages.add(alignedFacePng);
+
+    // final Uint8List alignedImageRGBA = await warpAffineToUint8List(
+    //   image,
+    //   imgByteData,
+    //   alignmentResult.affineMatrix
+    //       .map(
+    //         (row) => row.map((e) {
+    //           if (e != 1.0) {
+    //             return e * 112;
+    //           } else {
+    //             return 1.0;
+    //           }
+    //         }).toList(),
+    //       )
+    //       .toList(),
+    //   width: width,
+    //   height: height,
+    // );
+    // final Image alignedImage =
+    //     await decodeImageFromRgbaBytes(alignedImageRGBA, width, height);
+    // final Uint8List alignedImagePng =
+    //     await encodeImageToUint8List(alignedImage);
+
+    // alignedImages.add(alignedImagePng);
+  }
+  return alignedImages;
+}
+
 /// Preprocesses [imageData] based on [faceLandmarks] to align the faces in the images
 ///
 /// Returns a list of [Num3DInputMatrix] images, one for each face, ready for MobileFaceNet inference
@@ -861,6 +919,120 @@ Future<(Float32List, List<AlignmentResult>, List<bool>, List<double>)>
   return (alignedImagesFloat32List, alignmentResults, isBlurs, blurValues);
 }
 
+Future<Uint8List> warpAffineWithImagePackageToSameWorks(
+  Image inputImage,
+  ByteData imgByteDataRgba,
+  List<List<double>> transformationMatrix, {
+  int width = 112,
+  int height = 112,
+}) async {
+  // final image = img.Image.fromBytes(
+  //   width: inputImage.width,
+  //   height: inputImage.height,
+  //   bytes: imgByteDataRgba.buffer,
+  //   numChannels: 4,
+  // );
+  // return img.encodePng(image);
+  // final Uint8List outputList = Uint8List(4 * width * height);
+  log('image width: ${inputImage.width}, height: ${inputImage.height}, so total pixels: ${inputImage.width * inputImage.height}');
+
+  final img.Image outputImage =
+      img.Image(width: inputImage.width, height: inputImage.height);
+
+  for (int yTrans = 0; yTrans < inputImage.height; ++yTrans) {
+    for (int xTrans = 0; xTrans < inputImage.width; ++xTrans) {
+      final Color pixel =
+          readPixelColor(inputImage, imgByteDataRgba, xTrans, yTrans);
+      final img.ColorRgb8 imagePixel = img.ColorRgb8(
+        pixel.red,
+        pixel.green,
+        pixel.blue,
+      );
+
+      outputImage.setPixel(xTrans, yTrans, imagePixel);
+    }
+  }
+
+  return img.encodeJpg(outputImage);
+}
+
+Future<Uint8List> warpAffineWithImagePackage(
+  Image inputImage,
+  ByteData imgByteDataRgba,
+  List<List<double>> affineMatrix, {
+  int width = 112,
+  int height = 112,
+  required Function pixelInterpolation,
+}) async {
+  // Transforming the transformation matrix for use on 112x112 images
+  final transformationMatrix = affineMatrix
+      .map(
+        (row) => row.map((e) {
+          if (e != 1.0) {
+            return e * 112;
+          } else {
+            return 1.0;
+          }
+        }).toList(),
+      )
+      .toList();
+
+  final img.Image outputImage = img.Image(width: width, height: height);
+
+  if (width != 112 || height != 112) {
+    throw Exception(
+      'Width and height must be 112, other transformations are not supported yet.',
+    );
+  }
+
+  final stopwatch = Stopwatch()..start();
+
+  final A = Matrix.fromList([
+    [transformationMatrix[0][0], transformationMatrix[0][1]],
+    [transformationMatrix[1][0], transformationMatrix[1][1]],
+  ]);
+  final aInverse = A.inverse();
+  // final aInverseMinus = aInverse * -1;
+  final B = Vector.fromList(
+    [transformationMatrix[0][2], transformationMatrix[1][2]],
+  );
+  final b00 = B[0];
+  final b10 = B[1];
+  final a00Prime = aInverse[0][0];
+  final a01Prime = aInverse[0][1];
+  final a10Prime = aInverse[1][0];
+  final a11Prime = aInverse[1][1];
+
+  for (int yTrans = 0; yTrans < height; ++yTrans) {
+    for (int xTrans = 0; xTrans < width; ++xTrans) {
+      // Perform inverse affine transformation (original implementation, intuitive but slow)
+      // final X = aInverse * (Vector.fromList([xTrans, yTrans]) - B);
+      // final X = aInverseMinus * (B - [xTrans, yTrans]);
+      // final xList = X.asFlattenedList;
+      // num xOrigin = xList[0];
+      // num yOrigin = xList[1];
+
+      // Perform inverse affine transformation (fast implementation, less intuitive)
+      final num xOrigin = (xTrans - b00) * a00Prime + (yTrans - b10) * a01Prime;
+      final num yOrigin = (xTrans - b00) * a10Prime + (yTrans - b10) * a11Prime;
+
+      final Color pixel =
+          pixelInterpolation(xOrigin, yOrigin, inputImage, imgByteDataRgba);
+
+      outputImage.setPixel(
+        xTrans,
+        yTrans,
+        img.ColorRgba8(pixel.red, pixel.green, pixel.blue, pixel.alpha),
+      );
+    }
+  }
+
+  stopwatch.stop();
+  log('warping with interpolation $pixelInterpolation took ${stopwatch.elapsedMilliseconds} ms');
+
+  return img.encodeJpg(outputImage);
+}
+
 /// Function to warp an image [imageData] with an affine transformation using the estimated [transformationMatrix].
 ///
 /// Returns the warped image in the specified width and height, in [Uint8List] RGBA format.
@@ -868,8 +1040,8 @@ Future<Uint8List> warpAffineToUint8List(
   Image inputImage,
   ByteData imgByteDataRgba,
   List<List<double>> transformationMatrix, {
-  required int width,
-  required int height,
+  int width = 112,
+  int height = 112,
 }) async {
   final Uint8List outputList = Uint8List(4 * width * height);
 
@@ -1148,6 +1320,139 @@ Future<Uint8List> cropAndPadFaceData(
   );
 
   return await encodeImageToUint8List(facePadded);
+}
+
+Color getPixelBilinear(num fx, num fy, Image image, ByteData byteDataRgba) {
+  // Clamp to image boundaries
+  fx = fx.clamp(0, image.width - 1);
+  fy = fy.clamp(0, image.height - 1);
+
+  // Get the surrounding coordinates and their weights
+  final int x0 = fx.floor();
+  final int x1 = fx.ceil();
+  final int y0 = fy.floor();
+  final int y1 = fy.ceil();
+  final dx = fx - x0;
+  final dy = fy - y0;
+  final dx1 = 1.0 - dx;
+  final dy1 = 1.0 - dy;
+
+  // Get the original pixels
+  final Color pixel1 = readPixelColor(image, byteDataRgba, x0, y0);
+  final Color pixel2 = readPixelColor(image, byteDataRgba, x1, y0);
+  final Color pixel3 = readPixelColor(image, byteDataRgba, x0, y1);
+  final Color pixel4 = readPixelColor(image, byteDataRgba, x1, y1);
+
+  int bilinear(
+    num val1,
+    num val2,
+    num val3,
+    num val4,
+  ) =>
+      (val1 * dx1 * dy1 + val2 * dx * dy1 + val3 * dx1 * dy + val4 * dx * dy)
+          .round();
+
+  // Calculate the weighted sum of pixels
+  final int r = bilinear(pixel1.red, pixel2.red, pixel3.red, pixel4.red);
+  final int g =
+      bilinear(pixel1.green, pixel2.green, pixel3.green, pixel4.green);
+  final int b = bilinear(pixel1.blue, pixel2.blue, pixel3.blue, pixel4.blue);
+
+  return Color.fromRGBO(r, g, b, 1.0);
+}
+
+/// Get the pixel value using Bicubic Interpolation. Code taken mainly from https://github.com/brendan-duncan/image/blob/6e407612752ffdb90b28cd5863c7f65856349348/lib/src/image/image.dart#L697
+Color getPixelBicubic(num fx, num fy, Image image, ByteData byteDataRgba) {
+  fx = fx.clamp(0, image.width - 1);
+  fy = fy.clamp(0, image.height - 1);
+
+  final x = fx.toInt() - (fx >= 0.0 ? 0 : 1);
+  final px = x - 1;
+  final nx = x + 1;
+  final ax = x + 2;
+  final y = fy.toInt() - (fy >= 0.0 ? 0 : 1);
+  final py = y - 1;
+  final ny = y + 1;
+  final ay = y + 2;
+
+  final dx = fx - x;
+  final dy = fy - y;
+
+  num cubic(num dx, num ipp, num icp, num inp, num iap) =>
+      icp +
+      0.5 *
+          (dx * (-ipp + inp) +
+              dx * dx * (2 * ipp - 5 * icp + 4 * inp - iap) +
+              dx * dx * dx * (-ipp + 3 * icp - 3 * inp + iap));
+
+  final icc = readPixelColor(image, byteDataRgba, x, y);
+
+  final ipp =
+      px < 0 || py < 0 ? icc : readPixelColor(image, byteDataRgba, px, py);
+  final icp = px < 0 ? icc : readPixelColor(image, byteDataRgba, x, py);
+  final inp = py < 0 || nx >= image.width
+      ? icc
+      : readPixelColor(image, byteDataRgba, nx, py);
+  final iap = ax >= image.width || py < 0
+      ? icc
+      : readPixelColor(image, byteDataRgba, ax, py);
+
+  final ip0 = cubic(dx, ipp.red, icp.red, inp.red, iap.red);
+  final ip1 = cubic(dx, ipp.green, icp.green, inp.green, iap.green);
+  final ip2 = cubic(dx, ipp.blue, icp.blue, inp.blue, iap.blue);
+  // final ip3 = cubic(dx, ipp.a, icp.a, inp.a, iap.a);
+
+  final ipc = px < 0 ? icc : readPixelColor(image, byteDataRgba, px, y);
+  final inc =
+      nx >= image.width ? icc : readPixelColor(image, byteDataRgba, nx, y);
+  final iac =
+      ax >= image.width ? icc : readPixelColor(image, byteDataRgba, ax, y);
+
+  final ic0 = cubic(dx, ipc.red, icc.red, inc.red, iac.red);
+  final ic1 = cubic(dx, ipc.green, icc.green, inc.green, iac.green);
+  final ic2 = cubic(dx, ipc.blue, icc.blue, inc.blue, iac.blue);
+  // final ic3 = cubic(dx, ipc.a, icc.a, inc.a, iac.a);
+
+  final ipn = px < 0 || ny >= image.height
+      ? icc
+      : readPixelColor(image, byteDataRgba, px, ny);
+  final icn =
+      ny >= image.height ? icc : readPixelColor(image, byteDataRgba, x, ny);
+  final inn = nx >= image.width || ny >= image.height
+      ? icc
+      : readPixelColor(image, byteDataRgba, nx, ny);
+  final ian = ax >= image.width || ny >= image.height
+      ? icc
+      : readPixelColor(image, byteDataRgba, ax, ny);
+
+  final in0 = cubic(dx, ipn.red, icn.red, inn.red, ian.red);
+  final in1 = cubic(dx, ipn.green, icn.green, inn.green, ian.green);
+  final in2 = cubic(dx, ipn.blue, icn.blue, inn.blue, ian.blue);
+  // final in3 = cubic(dx, ipn.a, icn.a, inn.a, ian.a);
+
+  final ipa = px < 0 || ay >= image.height
+      ? icc
+      : readPixelColor(image, byteDataRgba, px, ay);
+  final ica =
+      ay >= image.height ? icc : readPixelColor(image, byteDataRgba, x, ay);
+  final ina = nx >= image.width || ay >= image.height
+      ? icc
+      : readPixelColor(image, byteDataRgba, nx, ay);
+  final iaa = ax >= image.width || ay >= image.height
+      ? icc
+      : readPixelColor(image, byteDataRgba, ax, ay);
+
+  final ia0 = cubic(dx, ipa.red, ica.red, ina.red, iaa.red);
+  final ia1 = cubic(dx, ipa.green, ica.green, ina.green, iaa.green);
+  final ia2 = cubic(dx, ipa.blue, ica.blue, ina.blue, iaa.blue);
+  // final ia3 = cubic(dx, ipa.a, ica.a, ina.a, iaa.a);
+
+  final c0 = cubic(dy, ip0, ic0, in0, ia0).clamp(0, 255).toInt();
+  final c1 = cubic(dy, ip1, ic1, in1, ia1).clamp(0, 255).toInt();
+  final c2 = cubic(dy, ip2, ic2, in2, ia2).clamp(0, 255).toInt();
+  // final c3 = cubic(dy, ip3, ic3, in3, ia3);
+
+  return Color.fromRGBO(c0, c1, c2, 1.0);
 }
 
 int bilinearInterpolation(
