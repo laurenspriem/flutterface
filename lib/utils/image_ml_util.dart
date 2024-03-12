@@ -320,40 +320,6 @@ Future<Uint8List> encodeImageToUint8List(
   return encodedImage;
 }
 
-Future<Uint8List> uint8ListRgbaToPng(Uint8List rgbaBytes,
-    {int width = 112, int height = 112}) async {
-  final pictureRecorder = PictureRecorder();
-  final canvas = Canvas(pictureRecorder);
-  final paint = Paint();
-  final img = await ImageDescriptor.raw(
-    await ImmutableBuffer.fromUint8List(rgbaBytes),
-    width: width,
-    height: height,
-    pixelFormat: PixelFormat.rgba8888,
-  ).instantiateCodec();
-  final frameInfo = await img.getNextFrame();
-  canvas.drawImage(frameInfo.image, Offset.zero, paint);
-
-  final picture = pictureRecorder.endRecording();
-  final imgBytes = await picture.toImage(width, height);
-  final byteData = await imgBytes.toByteData(format: ImageByteFormat.png);
-  return byteData!.buffer.asUint8List();
-}
-
-Uint8List uint8ListRgbaToPngImage(Uint8List rgbaImageData,
-    {int width = 112, int height = 112}) {
-  // Create an image from the raw data
-  img.Image image = img.Image.fromBytes(
-      width: width,
-      height: height,
-      bytes: rgbaImageData.buffer,
-      format: img.Format.uint8);
-  // Encode the image to PNG
-  Uint8List pngList = img.encodePng(image);
-  // Convert List<int> to Uint8List
-  return Uint8List.fromList(pngList);
-}
-
 /// Resizes an [Image] object to the specified [width] and [height].
 Future<(Image, Size)> resizeImage(
   Image image,
