@@ -75,7 +75,7 @@ class FaceMlService {
   /// Returns the aligned face as image data.
   ///
   /// Throws `CouldNotEstimateSimilarityTransform` or `GeneralFaceMlException` if the face alignment fails.
-  Future<Uint8List> alignSingleFaceCustomInterpolation(
+  Future<List<Uint8List>> alignSingleFaceCustomInterpolation(
     Uint8List imageData,
     FaceDetectionAbsolute face,
   ) async {
@@ -99,7 +99,7 @@ class FaceMlService {
       final List<Uint8List> faceAlignedData = await ImageMlIsolate.instance
           .preprocessFaceAlignCustom(imageData, [face]);
 
-      return faceAlignedData[0];
+      return faceAlignedData;
       // ignore: avoid_catches_without_on_clauses
     } catch (e, s) {
       throw GeneralFaceMlException('Face alignment failed: $e \n $s');
@@ -138,7 +138,7 @@ class FaceMlService {
     for (int i = 0; i < faces.length; ++i) {
       final alignedFace =
           await alignSingleFaceCustomInterpolation(imageData, faces[i]);
-      alignedFaces.add(alignedFace);
+      alignedFaces.add(alignedFace[0]);
     }
 
     return alignedFaces;

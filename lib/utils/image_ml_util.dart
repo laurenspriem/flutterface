@@ -681,6 +681,7 @@ Future<List<Uint8List>> preprocessFaceAlignToUint8ListBilinear(
   List<List<List<double>>> faceLandmarks, {
   int width = 112,
   int height = 112,
+  required Function pixelInterpolation,
 }) async {
   final alignedImages = <Uint8List>[];
   final Image image = await decodeImageFromData(imageData);
@@ -701,6 +702,7 @@ Future<List<Uint8List>> preprocessFaceAlignToUint8ListBilinear(
       image,
       imageByteData,
       alignmentResult.affineMatrix,
+      pixelInterpolation: pixelInterpolation,
     );
     alignedImages.add(alignedFacePng);
 
@@ -960,6 +962,7 @@ Future<Uint8List> warpAffineWithImagePackage(
   List<List<double>> affineMatrix, {
   int width = 112,
   int height = 112,
+  required Function pixelInterpolation,
 }) async {
   // Transforming the transformation matrix for use on 112x112 images
   final transformationMatrix = affineMatrix
@@ -981,6 +984,8 @@ Future<Uint8List> warpAffineWithImagePackage(
       'Width and height must be 112, other transformations are not supported yet.',
     );
   }
+
+  final stopwatch = Stopwatch()..start();
 
   final A = Matrix.fromList([
     [transformationMatrix[0][0], transformationMatrix[0][1]],
@@ -1012,7 +1017,7 @@ Future<Uint8List> warpAffineWithImagePackage(
       final num yOrigin = (xTrans - b00) * a10Prime + (yTrans - b10) * a11Prime;
 
       final Color pixel =
-          getPixelBicubic(xOrigin, yOrigin, inputImage, imgByteDataRgba);
+          pixelInterpolation(xOrigin, yOrigin, inputImage, imgByteDataRgba);
 
       outputImage.setPixel(
         xTrans,
@@ -1021,6 +1026,9 @@ Future<Uint8List> warpAffineWithImagePackage(
       );
     }
   }
+
+  stopwatch.stop();
+  log('warping with interpolation $pixelInterpolation took ${stopwatch.elapsedMilliseconds} ms');
 
   return img.encodeJpg(outputImage);
 }

@@ -25,8 +25,10 @@ class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
   Image? imageOriginal;
   Image? faceAligned;
+  Image? faceAligned2;
   Uint8List? imageOriginalData;
   Uint8List? faceAlignedData;
+  Uint8List? faceAlignedData2;
   Size imageSize = const Size(0, 0);
   late Size imageDisplaySize;
   int stockImageCounter = 0;
@@ -153,8 +155,10 @@ class _HomePageState extends State<HomePage> {
 
     final face = faceDetectionResultsAbsolute[faceFocusCounter];
     try {
-      faceAlignedData = await FaceMlService.instance
+      final bothFaces = await FaceMlService.instance
           .alignSingleFaceCustomInterpolation(imageOriginalData!, face);
+      faceAlignedData = bothFaces[0];
+      faceAlignedData2 = bothFaces[1];
     } catch (e) {
       devtools.log('Alignment of face failed: $e');
       return;
@@ -166,6 +170,7 @@ class _HomePageState extends State<HomePage> {
       embeddingStartIndex = 0;
       isEmbedded = false;
       faceAligned = Image.memory(faceAlignedData!);
+      faceAligned2 = Image.memory(faceAlignedData2!);
       showingFaceCounter = faceFocusCounter;
       faceFocusCounter =
           (faceFocusCounter + 1) % faceDetectionResultsAbsolute.length;
@@ -280,7 +285,33 @@ class _HomePageState extends State<HomePage> {
                   Center(
                     child: imageOriginal != null
                         ? isAligned
-                            ? faceAligned
+                            ? Center(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Column(
+                                      children: [
+                                        faceAligned!,
+                                        const Text(
+                                          'Bilinear',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Column(
+                                      children: [
+                                        faceAligned2!,
+                                        const Text(
+                                          'Bicubic',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              )
                             : Stack(
                                 children: [
                                   imageOriginal!,
@@ -390,15 +421,8 @@ class _HomePageState extends State<HomePage> {
             isAnalyzed
                 ? ElevatedButton.icon(
                     icon: const Icon(Icons.face_retouching_natural),
-                    label: const Text('Align faces (bicubic)'),
+                    label: const Text('Align faces'),
                     onPressed: alignFaceCustomInterpolation,
-                  )
-                : const SizedBox.shrink(),
-            isAnalyzed
-                ? ElevatedButton.icon(
-                    icon: const Icon(Icons.face_retouching_natural),
-                    label: const Text('Align faces (canvas)'),
-                    onPressed: alignFaceCanvasInterpolation,
                   )
                 : const SizedBox.shrink(),
             isAligned

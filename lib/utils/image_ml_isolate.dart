@@ -179,7 +179,15 @@ class ImageMlIsolate {
               await preprocessFaceAlignToUint8ListBilinear(
             imageData,
             faceLandmarks,
+            pixelInterpolation: getPixelBilinear,
           );
+          final List<Uint8List> bicubic =
+              await preprocessFaceAlignToUint8ListBilinear(
+            imageData,
+            faceLandmarks,
+            pixelInterpolation: getPixelBicubic,
+          );
+          result.addAll(bicubic);
           sendPort.send(List.from(result));
         case ImageOperation.preprocessFaceAlignCanvas:
           final imageData = args['imageData'] as Uint8List;
