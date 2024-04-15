@@ -34,7 +34,7 @@ final YOLOModelConfig yoloV5FaceS480x640onnx = YOLOModelConfig(
 final YOLOModelConfig yoloV5FaceS640x640onnx = YOLOModelConfig(
   modelPath: ModelFile.yoloV5FaceS640x640onnx,
   faceOptions: FaceDetectionOptionsYOLO(
-    minScoreSigmoidThreshold: 0.6,
+    minScoreSigmoidThreshold: 0.8,
     iouThreshold: 0.4,
     inputWidth: 640,
     inputHeight: 640,

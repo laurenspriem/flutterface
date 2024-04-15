@@ -9,6 +9,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 import 'package:flutterface/services/face_ml/face_ml_service.dart';
 import 'package:flutterface/utils/face_detection_painter.dart';
+import 'package:flutterface/utils/image_ml_util.dart';
 import 'package:flutterface/utils/snackbar_message.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -26,9 +27,11 @@ class _HomePageState extends State<HomePage> {
   Image? imageOriginal;
   Image? faceAligned;
   Image? faceAligned2;
+  Image? faceCropped;
   Uint8List? imageOriginalData;
   Uint8List? faceAlignedData;
   Uint8List? faceAlignedData2;
+  Uint8List? faceCroppedData;
   Size imageSize = const Size(0, 0);
   late Size imageDisplaySize;
   int stockImageCounter = 0;
@@ -48,10 +51,12 @@ class _HomePageState extends State<HomePage> {
   bool isFaceNetLoaded = false;
   bool isPredicting = false;
   bool isAligned = false;
+  bool isFaceCropped = false;
   bool isEmbedded = false;
   List<FaceDetectionRelative> faceDetectionResultsRelative = [];
   List<FaceDetectionAbsolute> faceDetectionResultsAbsolute = [];
   List<double> faceEmbeddingResult = <double>[];
+  double blurValue = 0;
 
   @override
   void initState() {
@@ -99,6 +104,7 @@ class _HomePageState extends State<HomePage> {
     faceDetectionResultsAbsolute = <FaceDetectionAbsolute>[];
     faceDetectionResultsRelative = <FaceDetectionRelative>[];
     isAligned = false;
+    isFaceCropped = false;
     faceAlignedData = null;
     faceFocusCounter = 0;
     isEmbedded = false;
@@ -132,6 +138,46 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       isPredicting = false;
       isAnalyzed = true;
+    });
+  }
+
+  void cropDetectedFace() async {
+    if (imageOriginalData == null) {
+      showResponseSnackbar(context, 'Please select an image first');
+      return;
+    }
+    if (!isAnalyzed) {
+      showResponseSnackbar(context, 'Please detect faces first');
+      return;
+    }
+    if (faceDetectionResultsAbsolute.isEmpty) {
+      showResponseSnackbar(context, 'No face detected, nothing to crop');
+      return;
+    }
+    if (faceDetectionResultsAbsolute.length == 1 && isAligned) {
+      showResponseSnackbar(context, 'This is the only face found in the image');
+      return;
+    }
+
+    final face = faceDetectionResultsAbsolute[faceFocusCounter];
+    try {
+      final facesList = await generateFaceThumbnails(imageOriginalData!,
+          faceDetections: [face]);
+      faceCroppedData = facesList[0];
+    } catch (e) {
+      devtools.log('Alignment of face failed: $e');
+      return;
+    }
+
+    setState(() {
+      isFaceCropped = true;
+      faceEmbeddingResult = [];
+      embeddingStartIndex = 0;
+      isEmbedded = false;
+      faceCropped = Image.memory(faceCroppedData!);
+      showingFaceCounter = faceFocusCounter;
+      faceFocusCounter =
+          (faceFocusCounter + 1) % faceDetectionResultsAbsolute.length;
     });
   }
 
@@ -226,13 +272,14 @@ class _HomePageState extends State<HomePage> {
       isPredicting = true;
     });
 
-    final (faceEmbeddingResultLocal, isBlur, blurValue) =
+    final (faceEmbeddingResultLocal, isBlurLocal, blurValueLocal) =
         await FaceMlService.instance.embedSingleFace(
       imageOriginalData!,
       faceDetectionResultsRelative[showingFaceCounter],
     );
     faceEmbeddingResult = faceEmbeddingResultLocal;
-    devtools.log('Blur detected: $isBlur, blur value: $blurValue');
+    blurValue = blurValueLocal;
+    devtools.log('Blur detected: $isBlurLocal, blur value: $blurValueLocal');
     // devtools.log('Embedding: $faceEmbeddingResult');
 
     setState(() {
@@ -398,6 +445,7 @@ class _HomePageState extends State<HomePage> {
                             Text(
                               '${faceEmbeddingResult[embeddingStartIndex + 1]}',
                             ),
+                          Text('Blur: $blurValue'),
                         ],
                       )
                     : const SizedBox(height: 48),
@@ -425,7 +473,7 @@ class _HomePageState extends State<HomePage> {
                     onPressed: alignFaceCustomInterpolation,
                   )
                 : const SizedBox.shrink(),
-            isAligned
+            (isAligned && !isEmbedded)
                 ? ElevatedButton.icon(
                     icon: const Icon(Icons.numbers_outlined),
                     label: const Text('Embed face'),

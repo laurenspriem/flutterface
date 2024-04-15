@@ -10,7 +10,7 @@ import 'package:flutterface/services/face_ml/blur_detection_service.dart';
 import 'package:flutterface/services/face_ml/face_alignment/alignment_result.dart';
 import 'package:flutterface/services/face_ml/face_alignment/similarity_transform.dart';
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
-import 'package:image/image.dart' as img;
+import 'package:image/image.dart' as img_lib;
 import 'package:logging/logging.dart';
 import 'package:ml_linalg/linalg.dart';
 
@@ -158,6 +158,34 @@ List<List<int>> createGrayscaleIntMatrixFromImage(
   );
 }
 
+List<List<int>> createGrayscaleIntMatrixFromNormalized2List(
+  Float32List imageList,
+  int startIndex, {
+  int width = 112,
+  int height = 112,
+}) {
+  return List.generate(
+    height,
+    (y) => List.generate(
+      width,
+      (x) {
+        // 0.299 ∙ Red + 0.587 ∙ Green + 0.114 ∙ Blue
+        final pixelIndex = startIndex + 3 * (y * width + x);
+        return (0.299 * unnormalizePixelRange2(imageList[pixelIndex]) +
+                0.587 * unnormalizePixelRange2(imageList[pixelIndex + 1]) +
+                0.114 * unnormalizePixelRange2(imageList[pixelIndex + 2]))
+            .round()
+            .clamp(0, 255);
+        // return unnormalizePixelRange2(
+        //   (0.299 * imageList[pixelIndex] +
+        //       0.587 * imageList[pixelIndex + 1] +
+        //       0.114 * imageList[pixelIndex + 2]),
+        // ).round().clamp(0, 255);
+      },
+    ),
+  );
+}
+
 Float32List createFloat32ListFromImageChannelsFirst(
   Image image,
   ByteData byteDataRgba, {
@@ -235,6 +263,13 @@ double normalizePixelRange1(num pixelValue) {
 /// It assumes that the pixel value is originally in range [0, 255]
 double normalizePixelRange2(num pixelValue) {
   return (pixelValue / 127.5) - 1;
+}
+
+/// Function unnormalizes the pixel value to be in range [0, 255].
+///
+/// It assumes that the pixel value is originally in range [-1, 1]
+int unnormalizePixelRange2(double pixelValue) {
+  return ((pixelValue + 1) * 127.5).round().clamp(0, 255);
 }
 
 double normalizePixelNoRange(num pixelValue) {
@@ -376,11 +411,53 @@ Future<(Image, Size)> resizeImage(
   return (resizedImage, Size(scaledWidth.toDouble(), scaledHeight.toDouble()));
 }
 
+/// Crops an [image] based on the specified [x], [y], [width] and [height].
+Future<Uint8List> cropImage(
+  Image image,
+  ByteData imgByteData, {
+  required int x,
+  required int y,
+  required int width,
+  required int height,
+}) async {
+  // final newByteData = ByteData(width * height * 4);
+  // for (var h = y; h < y + height; h++) {
+  //   for (var w = x; w < x + width; w++) {
+  //     final pixel = readPixelColor(image, imgByteData, w, y);
+  //     setPixelColor(
+  //       Size(width.toDouble(), height.toDouble()),
+  //       newByteData,
+  //       w,
+  //       h,
+  //       pixel,
+  //     );
+  //   }
+  // }
+  // final newImage =
+  //     decodeImageFromRgbaBytes(newByteData.buffer.asUint8List(), width, height);
+
+  final newImage = img_lib.Image(width: width, height: height);
+
+  for (var h = y; h < y + height; h++) {
+    for (var w = x; w < x + width; w++) {
+      final pixel = readPixelColor(image, imgByteData, w, y);
+      newImage.setPixel(
+        w,
+        h,
+        img_lib.ColorRgb8(pixel.red, pixel.green, pixel.blue),
+      );
+    }
+  }
+  final newImageDataPng = img_lib.encodePng(newImage);
+
+  return newImageDataPng;
+}
+
 /// Crops an [Image] object to the specified [width] and [height], starting at the specified [x] and [y] coordinates.
 /// Optionally, the cropped image can be resized to comply with a [maxSize] and/or [minSize].
 /// Optionally, the cropped image can be rotated by [rotation] radians.
 /// Optionally, the [quality] of the resizing interpolation can be specified.
-Future<Image> cropImage(
+Future<Image> cropImageWithCanvas(
   Image image, {
   required double x,
   required double y,
@@ -713,7 +790,7 @@ Future<List<Uint8List>> preprocessFaceAlignToUint8List(
       continue;
     }
     final alignmentBox = getAlignedFaceBox(alignmentResult);
-    final Image alignedFace = await cropImage(
+    final Image alignedFace = await cropImageWithCanvas(
       image,
       x: alignmentBox[0],
       y: alignmentBox[1],
@@ -854,7 +931,7 @@ Future<
       continue;
     }
     final alignmentBox = getAlignedFaceBox(alignmentResult);
-    final Image alignedFace = await cropImage(
+    final Image alignedFace = await cropImageWithCanvas(
       image,
       x: alignmentBox[0],
       y: alignmentBox[1],
@@ -913,6 +990,7 @@ Future<(Float32List, List<AlignmentResult>, List<bool>, List<double>)>
   int height = 112,
 }) async {
   final Image image = await decodeImageFromData(imageData);
+  final imageByteData = await getByteDataFromImage(image);
 
   final List<FaceDetectionRelative> relativeFaces =
       facesJson.map((face) => FaceDetectionRelative.fromJson(face)).toList();
@@ -942,38 +1020,28 @@ Future<(Float32List, List<AlignmentResult>, List<bool>, List<double>)>
       alignmentResults.add(AlignmentResult.empty());
       continue;
     }
-    final alignmentBox = getAlignedFaceBox(alignmentResult);
-    final Image alignedFace = await cropImage(
+    alignmentResults.add(alignmentResult);
+
+    warpAffineFloat32List(
       image,
-      x: alignmentBox[0],
-      y: alignmentBox[1],
-      width: alignmentBox[2] - alignmentBox[0],
-      height: alignmentBox[3] - alignmentBox[1],
-      maxSize: Size(width.toDouble(), height.toDouble()),
-      minSize: Size(width.toDouble(), height.toDouble()),
-      rotation: alignmentResult.rotation,
-      quality: FilterQuality.medium,
-    );
-    final alignedFaceByteData = await getByteDataFromImage(alignedFace);
-    addInputImageToFloat32List(
-      alignedFace,
-      alignedFaceByteData,
+      imageByteData,
+      alignmentResult.affineMatrix,
       alignedImagesFloat32List,
       alignedImageIndex,
-      normFunction: normalizePixelRange2,
     );
-    alignedImageIndex += 3 * width * height;
-    alignmentResults.add(alignmentResult);
+
     final blurDetectionStopwatch = Stopwatch()..start();
-    final faceGrayMatrix = createGrayscaleIntMatrixFromImage(
-      alignedFace,
-      alignedFaceByteData,
+    final faceGrayMatrix = createGrayscaleIntMatrixFromNormalized2List(
+      alignedImagesFloat32List,
+      alignedImageIndex,
     );
-    final grascalems = blurDetectionStopwatch.elapsedMilliseconds;
-    log('creating grayscale matrix took $grascalems ms');
+
+    alignedImageIndex += 3 * width * height;
+    final grayscalems = blurDetectionStopwatch.elapsedMilliseconds;
+    log('creating grayscale matrix took $grayscalems ms');
     final (isBlur, blurValue) = await BlurDetectionService.instance
         .predictIsBlurGrayLaplacian(faceGrayMatrix);
-    final blurms = blurDetectionStopwatch.elapsedMilliseconds - grascalems;
+    final blurms = blurDetectionStopwatch.elapsedMilliseconds - grayscalems;
     log('blur detection took $blurms ms');
     log(
       'total blur detection took ${blurDetectionStopwatch.elapsedMilliseconds} ms',
@@ -996,6 +1064,76 @@ Future<(Float32List, List<AlignmentResult>, List<bool>, List<double>)>
   return (alignedImagesFloat32List, alignmentResults, isBlurs, blurValues);
 }
 
+void warpAffineFloat32List(
+  Image inputImage,
+  ByteData imgByteDataRgba,
+  List<List<double>> affineMatrix,
+  Float32List outputList,
+  int startIndex, {
+  int width = 112,
+  int height = 112,
+}) {
+  if (width != 112 || height != 112) {
+    throw Exception(
+      'Width and height must be 112, other transformations are not supported yet.',
+    );
+  }
+
+  final transformationMatrix = affineMatrix
+      .map(
+        (row) => row.map((e) {
+          if (e != 1.0) {
+            return e * 112;
+          } else {
+            return 1.0;
+          }
+        }).toList(),
+      )
+      .toList();
+
+  final A = Matrix.fromList([
+    [transformationMatrix[0][0], transformationMatrix[0][1]],
+    [transformationMatrix[1][0], transformationMatrix[1][1]],
+  ]);
+  final aInverse = A.inverse();
+  // final aInverseMinus = aInverse * -1;
+  final B = Vector.fromList(
+    [transformationMatrix[0][2], transformationMatrix[1][2]],
+  );
+  final b00 = B[0];
+  final b10 = B[1];
+  final a00Prime = aInverse[0][0];
+  final a01Prime = aInverse[0][1];
+  final a10Prime = aInverse[1][0];
+  final a11Prime = aInverse[1][1];
+
+  for (int yTrans = 0; yTrans < height; ++yTrans) {
+    for (int xTrans = 0; xTrans < width; ++xTrans) {
+      // Perform inverse affine transformation (original implementation, intuitive but slow)
+      // final X = aInverse * (Vector.fromList([xTrans, yTrans]) - B);
+      // final X = aInverseMinus * (B - [xTrans, yTrans]);
+      // final xList = X.asFlattenedList;
+      // num xOrigin = xList[0];
+      // num yOrigin = xList[1];
+
+      // Perform inverse affine transformation (fast implementation, less intuitive)
+      final num xOrigin = (xTrans - b00) * a00Prime + (yTrans - b10) * a01Prime;
+      final num yOrigin = (xTrans - b00) * a10Prime + (yTrans - b10) * a11Prime;
+
+      final Color pixel =
+          getPixelBicubic(xOrigin, yOrigin, inputImage, imgByteDataRgba);
+
+      // Set the new pixel
+      outputList[startIndex + 3 * (yTrans * width + xTrans)] =
+          normalizePixelRange2(pixel.red);
+      outputList[startIndex + 3 * (yTrans * width + xTrans) + 1] =
+          normalizePixelRange2(pixel.green);
+      outputList[startIndex + 3 * (yTrans * width + xTrans) + 2] =
+          normalizePixelRange2(pixel.blue);
+    }
+  }
+}
+
 Future<Uint8List> warpAffineWithImagePackageToSameWorks(
   Image inputImage,
   ByteData imgByteDataRgba,
@@ -1013,14 +1151,14 @@ Future<Uint8List> warpAffineWithImagePackageToSameWorks(
   // final Uint8List outputList = Uint8List(4 * width * height);
   log('image width: ${inputImage.width}, height: ${inputImage.height}, so total pixels: ${inputImage.width * inputImage.height}');
 
-  final img.Image outputImage =
-      img.Image(width: inputImage.width, height: inputImage.height);
+  final img_lib.Image outputImage =
+      img_lib.Image(width: inputImage.width, height: inputImage.height);
 
   for (int yTrans = 0; yTrans < inputImage.height; ++yTrans) {
     for (int xTrans = 0; xTrans < inputImage.width; ++xTrans) {
       final Color pixel =
           readPixelColor(inputImage, imgByteDataRgba, xTrans, yTrans);
-      final img.ColorRgb8 imagePixel = img.ColorRgb8(
+      final img_lib.ColorRgb8 imagePixel = img_lib.ColorRgb8(
         pixel.red,
         pixel.green,
         pixel.blue,
@@ -1030,7 +1168,7 @@ Future<Uint8List> warpAffineWithImagePackageToSameWorks(
     }
   }
 
-  return img.encodeJpg(outputImage);
+  return img_lib.encodeJpg(outputImage);
 }
 
 Future<Uint8List> warpAffineWithImagePackage(
@@ -1054,7 +1192,7 @@ Future<Uint8List> warpAffineWithImagePackage(
       )
       .toList();
 
-  final img.Image outputImage = img.Image(width: width, height: height);
+  final img_lib.Image outputImage = img_lib.Image(width: width, height: height);
 
   if (width != 112 || height != 112) {
     throw Exception(
@@ -1099,7 +1237,7 @@ Future<Uint8List> warpAffineWithImagePackage(
       outputImage.setPixel(
         xTrans,
         yTrans,
-        img.ColorRgba8(pixel.red, pixel.green, pixel.blue, pixel.alpha),
+        img_lib.ColorRgba8(pixel.red, pixel.green, pixel.blue, pixel.alpha),
       );
     }
   }
@@ -1107,7 +1245,7 @@ Future<Uint8List> warpAffineWithImagePackage(
   stopwatch.stop();
   log('warping with interpolation $pixelInterpolation took ${stopwatch.elapsedMilliseconds} ms');
 
-  return img.encodeJpg(outputImage);
+  return img_lib.encodeJpg(outputImage);
 }
 
 /// Function to warp an image [imageData] with an affine transformation using the estimated [transformationMatrix].
@@ -1344,6 +1482,42 @@ Future<Double3DInputMatrix> warpAffineToMatrix(
   return outputMatrix;
 }
 
+Future<List<Uint8List>> generateFaceThumbnails(
+  Uint8List imageData, {
+  required List<FaceDetectionAbsolute> faceDetections,
+}) async {
+  // final Uint8List imageData = await File(imagePath).readAsBytes();
+  final Image image = await decodeImageFromData(imageData);
+  final ByteData imgByteData = await getByteDataFromImage(image);
+
+  int i = 0;
+  try {
+    final List<Uint8List> faceThumbnails = [];
+
+    for (final faceBox in faceDetections) {
+      final Uint8List faceThumbnail = await cropImage(
+        image,
+        imgByteData,
+        x: faceBox.xMinBox.round() - (faceBox.xMinBox / 2).round(),
+        y: faceBox.yMinBox.round() - (faceBox.yMinBox / 2).round(),
+        width: (faceBox.width * 2).round(),
+        height: (faceBox.height * 2).round(),
+      );
+      // final Uint8List faceThumbnailPng = await encodeImageToUint8List(
+      //   faceThumbnail,
+      //   format: ImageByteFormat.png,
+      // );
+      faceThumbnails.add(faceThumbnail);
+      i++;
+    }
+    return faceThumbnails;
+  } catch (e) {
+    log('[ImageMlUtils] Error generating face thumbnails: $e');
+    log('[ImageMlUtils] cropImage problematic input argument: ${faceDetections[i]}');
+    rethrow;
+  }
+}
+
 /// Generates a face thumbnail from [imageData] and a [faceDetection].
 ///
 /// Returns a [Uint8List] image, in png format.
@@ -1353,7 +1527,7 @@ Future<Uint8List> generateFaceThumbnailFromData(
 ) async {
   final Image image = await decodeImageFromData(imageData);
 
-  final Image faceThumbnail = await cropImage(
+  final Image faceThumbnail = await cropImageWithCanvas(
     image,
     x: (faceDetection.xMinBox * image.width).round() - 20,
     y: (faceDetection.yMinBox * image.height).round() - 30,
@@ -1381,7 +1555,7 @@ Future<Uint8List> cropAndPadFaceData(
 ) async {
   final Image image = await decodeImageFromData(imageData);
 
-  final Image faceCrop = await cropImage(
+  final Image faceCrop = await cropImageWithCanvas(
     image,
     x: (faceBox[0] * image.width),
     y: (faceBox[1] * image.height),

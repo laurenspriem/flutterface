@@ -26,6 +26,7 @@ linter:
     - use_key_in_widget_constructors
     - cancel_subscriptions
     - await_only_futures
+    - unawaited_futures
 
     - avoid_empty_else
     - exhaustive_cases
@@ -42,7 +43,6 @@ linter:
     - use_rethrow_when_possible
     - prefer_single_quotes
     - sort_child_properties_last
-    - unawaited_futures
     - discarded_futures
     # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
 
@@ -57,5 +57,5 @@ analyzer:
     await_only_futures: warning
     only_throw_errors: error # to prevent errors like this https://stackoverflow.com/questions/72714905/flutter-dart-try-catch-not-working-properly
     avoid_catches_without_on_clauses: info
-    unawaited_futures: info
+    unawaited_futures: error
     discarded_futures: info

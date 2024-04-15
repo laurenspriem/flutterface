@@ -34,7 +34,7 @@ class YoloOnnxFaceDetection {
   ///
   /// config options: yoloV5FaceN //
   static final instance = YoloOnnxFaceDetection._privateConstructor(
-    config: yoloV5FaceN640x640onnx,
+    config: yoloV5FaceS640x640DynamicBatchonnx,
   );
   factory YoloOnnxFaceDetection() {
     OrtEnv.instance.init();
@@ -107,7 +107,7 @@ class YoloOnnxFaceDetection {
     List<OrtValue?>? outputs;
     try {
       final runOptions = OrtRunOptions();
-      outputs =  _session?.run(runOptions, inputs);
+      outputs = _session?.run(runOptions, inputs);
       inputOrt.release();
       runOptions.release();
     } catch (e, s) {
@@ -167,6 +167,9 @@ class YoloOnnxFaceDetection {
       detections: relativeDetections,
       iouThreshold: _faceOptions.iouThreshold,
     );
+
+    _logger.info(
+        '${relativeDetections.length} face detected, with scores: ${relativeDetections.map((e) => e.score).toList()}',);
 
     if (relativeDetections.isEmpty) {
       _logger.info('No face detected');
