@@ -1002,17 +1002,15 @@ Future<(Float32List, List<AlignmentResult>, List<bool>, List<double>)>
     imageHeight: image.height,
   );
 
-  final List<List<List<double>>> faceLandmarks =
-      absoluteFaces.map((face) => face.allKeypoints).toList();
-
   final alignedImagesFloat32List =
-      Float32List(3 * width * height * faceLandmarks.length);
+      Float32List(3 * width * height * absoluteFaces.length);
   final alignmentResults = <AlignmentResult>[];
   final isBlurs = <bool>[];
   final blurValues = <double>[];
 
   int alignedImageIndex = 0;
-  for (final faceLandmark in faceLandmarks) {
+  for (final face in absoluteFaces) {
+    final faceLandmark = face.allKeypoints;
     final (alignmentResult, correctlyEstimated) =
         SimilarityTransform.instance.estimate(faceLandmark);
     if (!correctlyEstimated) {
@@ -1040,7 +1038,7 @@ Future<(Float32List, List<AlignmentResult>, List<bool>, List<double>)>
     final grayscalems = blurDetectionStopwatch.elapsedMilliseconds;
     log('creating grayscale matrix took $grayscalems ms');
     final (isBlur, blurValue) = await BlurDetectionService.instance
-        .predictIsBlurGrayLaplacian(faceGrayMatrix);
+        .predictIsBlurGrayLaplacian(faceGrayMatrix, faceDirection: face.getFaceDirection());
     final blurms = blurDetectionStopwatch.elapsedMilliseconds - grayscalems;
     log('blur detection took $blurms ms');
     log(

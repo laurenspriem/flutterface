@@ -53,10 +53,12 @@ class FacePainter extends CustomPainter {
         );
       }
 
-      // Draw score
+      // Draw score and direction of the face
       final TextPainter textPainter = TextPainter(
         text: TextSpan(
-          text: face.score.toStringAsFixed(3),
+          text:
+              // '${face.score.toStringAsFixed(3)} ${face.getFaceDirection().toDirectionString()}',
+              face.getFaceDirection().toDirectionString(),
           style: const TextStyle(
             color: Colors.yellow,
             fontSize: 10.0,
