@@ -445,7 +445,7 @@ class _HomePageState extends State<HomePage> {
                             Text(
                               '${faceEmbeddingResult[embeddingStartIndex + 1]}',
                             ),
-                          Text('Blur: $blurValue'),
+                          Text('Blur: ${blurValue.round()}'),
                         ],
                       )
                     : const SizedBox(height: 48),
